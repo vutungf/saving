@@ -28,7 +28,16 @@ data class Account(
     val closedAt: String? = null,
     val createdAt: String,
     val updatedAt: String,
+    /** Phần tiền của từng người sở hữu. Rỗng = chưa gán. Khi có, tổng các phần luôn bằng [amount]. */
+    val owners: List<OwnerShare> = emptyList(),
 )
+
+/** Người sở hữu sổ (ví dụ: Bố, Mẹ, Con). */
+@Serializable
+data class Owner(val id: String, val name: String)
+
+@Serializable
+data class OwnerShare(val ownerId: String, val amount: Long)
 
 @Serializable
 data class BackupFile(
@@ -36,5 +45,6 @@ data class BackupFile(
     val version: Int = 1,
     val currency: String = "VND",
     val exportedAt: String,
+    val owners: List<Owner> = emptyList(),
     val accounts: List<Account>,
 )

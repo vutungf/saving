@@ -73,7 +73,7 @@ fun BankLogo(code: String, name: String, size: Dp = 40.dp) {
         val palette = LocalExtra.current.chart
         val c = palette[Math.floorMod(name.lowercase().hashCode(), palette.size)]
         Box(Modifier.size(size).clip(shape).background(c), contentAlignment = Alignment.Center) {
-            Text(initials(name), color = Color.White, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.36f).sp)
+            Text(initials(name), color = Color.White, style = centeredLetter(size.value * 0.36f))
         }
     }
 }
@@ -176,3 +176,19 @@ object ThousandsTransformation : VisualTransformation {
         return TransformedText(AnnotatedString(out), mapping)
     }
 }
+
+/**
+ * Kiểu chữ cho chữ cái nằm giữa hình tròn/vuông nhỏ. Be Vietnam Pro chừa nhiều khoảng phía trên cho dấu
+ * tiếng Việt nên chữ bị lệch xuống; dùng font hệ thống, bỏ font padding và cắt dòng sát chữ để căn giữa.
+ */
+fun centeredLetter(sizeSp: Float) = androidx.compose.ui.text.TextStyle(
+    fontFamily = androidx.compose.ui.text.font.FontFamily.Default,
+    fontWeight = FontWeight.Bold,
+    fontSize = sizeSp.sp,
+    lineHeight = sizeSp.sp,
+    platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+    lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+        alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+        trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+    ),
+)

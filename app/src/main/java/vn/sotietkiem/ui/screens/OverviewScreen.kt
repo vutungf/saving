@@ -1,6 +1,7 @@
 package vn.sotietkiem.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +46,15 @@ import vn.sotietkiem.ui.components.BankDonut
 import vn.sotietkiem.ui.components.BankLogo
 import vn.sotietkiem.ui.components.CashflowBars
 import vn.sotietkiem.ui.components.MaturedButtons
+import vn.sotietkiem.ui.components.MaturityCalculator
+import vn.sotietkiem.ui.components.OwnerAvatar
+import vn.sotietkiem.ui.components.ownerColor
+import vn.sotietkiem.data.Owner
+import vn.sotietkiem.domain.OwnerScope
+import vn.sotietkiem.domain.ownerAllocation
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.FilterChip
 import vn.sotietkiem.ui.components.SectionCard
 import vn.sotietkiem.ui.components.StatusChip
 import vn.sotietkiem.ui.theme.LocalExtra
@@ -55,7 +65,10 @@ import java.util.Locale
 
 @Composable
 fun OverviewScreen(
-    accounts: List<Account>,
+    allAccounts: List<Account>,
+    owners: List<Owner>,
+    scope: String,
+    onScope: (String) -> Unit,
     nowMillis: Long,
     lastExport: Long,
     contentPadding: PaddingValues,
@@ -63,7 +76,11 @@ fun OverviewScreen(
     onAdd: () -> Unit,
     onSample: () -> Unit,
     onBackup: () -> Unit,
+    unsaved: Boolean = false,
+    onExport: () -> Unit = onBackup,
 ) {
+    // Thống kê theo người sở hữu: mỗi sổ chỉ tính phần tiền của người được chọn
+    val accounts = OwnerScope.apply(allAccounts, scope)
     val sum = summarize(accounts)
     LazyColumn(
         contentPadding = PaddingValues(
@@ -73,13 +90,24 @@ fun OverviewScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        if (accounts.isEmpty()) {
+        if (allAccounts.isEmpty()) {
             item { EmptyState(onAdd, onSample) }
             return@LazyColumn
         }
 
-        val needBackup = lastExport == 0L || nowMillis - lastExport > 30L * 86_400_000
-        if (needBackup) item { BackupReminder(lastExport, onBackup) }
+        val needBackup = unsaved || lastExport == 0L || nowMillis - lastExport > 30L * 86_400_000
+        if (needBackup) item { BackupReminder(lastExport, unsaved, onExport) }
+
+        if (owners.isNotEmpty()) {
+            item { ScopeChips(owners, allAccounts.any { it.owners.isEmpty() }, scope, onScope) }
+            if (accounts.isEmpty()) {
+                item {
+                    Text("Chưa có sổ nào trong phạm vi này.", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                return@LazyColumn
+            }
+        }
 
         item { Hero(sum.principal, sum.openAccounts.size, sum.openAccounts.sumOf { Calc.accrued(it, nowMillis) }, sum.dailyInterest) }
 
@@ -112,6 +140,17 @@ fun OverviewScreen(
             }
         }
 
+        item { MaturityCalculator(accounts, onOpen = { actions.open(it) }) }
+
+        if (scope == OwnerScope.ALL && owners.isNotEmpty()) {
+            val bySlices = ownerAllocation(allAccounts, owners)
+            if (bySlices.isNotEmpty()) item {
+                val extra = LocalExtra.current
+                val cols = bySlices.map { s -> if (s.bankCode == null) extra.muted else ownerColor(owners, s.bankCode) }
+                SectionCard("Phân bổ theo người sở hữu") { BankDonut(bySlices, unit = "người", colors = cols) }
+            }
+        }
+
         val slices = bankAllocation(accounts)
         if (slices.isNotEmpty()) item { SectionCard("Phân bổ theo ngân hàng") { BankDonut(slices) } }
 
@@ -121,6 +160,23 @@ fun OverviewScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 CashflowBars(cashflow12(accounts))
             }
+        }
+    }
+}
+
+/** Chọn phạm vi thống kê: Tất cả, từng người, hoặc Chưa gán. */
+@Composable
+private fun ScopeChips(owners: List<Owner>, hasUnassigned: Boolean, scope: String, onScope: (String) -> Unit) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = scope == OwnerScope.ALL, onClick = { onScope(OwnerScope.ALL) }, label = { Text("Tất cả") })
+        owners.forEach { o ->
+            FilterChip(
+                selected = scope == o.id, onClick = { onScope(o.id) }, label = { Text(o.name) },
+                leadingIcon = { OwnerAvatar(o.name, ownerColor(owners, o.id), 20.dp) },
+            )
+        }
+        if (hasUnassigned) {
+            FilterChip(selected = scope == OwnerScope.UNASSIGNED, onClick = { onScope(OwnerScope.UNASSIGNED) }, label = { Text("Chưa gán") })
         }
     }
 }
@@ -176,7 +232,10 @@ private fun DueRow(a: Account, actions: AccountActions) {
     val st = Calc.status(a)
     val left = Calc.daysLeft(a)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { actions.open(a) }.padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             BankLogo(a.bankCode, a.bankName, 36.dp)
             Column(Modifier.weight(1f)) {
                 Text(a.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -199,7 +258,7 @@ private fun DueRow(a: Account, actions: AccountActions) {
 }
 
 @Composable
-private fun BackupReminder(lastExport: Long, onBackup: () -> Unit) {
+private fun BackupReminder(lastExport: Long, unsaved: Boolean, onExport: () -> Unit) {
     val x = LocalExtra.current
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -208,10 +267,14 @@ private fun BackupReminder(lastExport: Long, onBackup: () -> Unit) {
         Row(Modifier.padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.CloudUpload, null, tint = x.warning)
             Text(
-                if (lastExport == 0L) "Bạn chưa sao lưu dữ liệu lần nào." else "Lần sao lưu gần nhất đã quá 30 ngày.",
+                when {
+                    lastExport == 0L -> "Bạn chưa sao lưu dữ liệu lần nào. Hãy xuất file JSON để không mất dữ liệu."
+                    unsaved -> "Có thay đổi chưa được lưu ra file JSON."
+                    else -> "Lần sao lưu gần nhất đã quá 30 ngày."
+                },
                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
             )
-            TextButton(onClick = onBackup) { Text("Sao lưu") }
+            TextButton(onClick = onExport) { Text("Xuất file") }
         }
     }
 }

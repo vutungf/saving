@@ -21,6 +21,7 @@ import java.util.UUID
  */
 class Repository(context: Context) {
     private val file = File(context.filesDir, "stk_v1.json")
+    private val ownersFile = File(context.filesDir, "stk_owners.json")
     private val prefs = context.getSharedPreferences("stk_prefs", Context.MODE_PRIVATE)
 
     fun load(): List<Account> = runCatching {
@@ -36,9 +37,27 @@ class Repository(context: Context) {
         }
     }
 
+    fun loadOwners(): List<Owner> = runCatching {
+        if (!ownersFile.exists()) emptyList() else Codec.json.decodeFromString<List<Owner>>(ownersFile.readText())
+    }.getOrDefault(emptyList())
+
+    @Synchronized
+    fun saveOwners(list: List<Owner>) {
+        val tmp = File(ownersFile.parentFile, ownersFile.name + ".tmp")
+        tmp.writeText(Codec.json.encodeToString(list))
+        if (!tmp.renameTo(ownersFile)) {
+            ownersFile.writeText(tmp.readText()); tmp.delete()
+        }
+    }
+
     var lastExportAt: Long
         get() = prefs.getLong("lastExportAt", 0L)
         set(v) = prefs.edit().putLong("lastExportAt", v).apply()
+
+    /** Thời điểm dữ liệu thay đổi gần nhất; lớn hơn lastExportAt nghĩa là có thay đổi chưa xuất file. */
+    var lastChangeAt: Long
+        get() = prefs.getLong("lastChangeAt", 0L)
+        set(v) = prefs.edit().putLong("lastChangeAt", v).apply()
 
     var remindersEnabled: Boolean
         get() = prefs.getBoolean("reminders", true)
@@ -50,7 +69,7 @@ class Repository(context: Context) {
         set(v) = prefs.edit().putStringSet("notified", v).apply()
 }
 
-data class ImportResult(val accounts: List<Account>, val skipped: Int)
+data class ImportResult(val accounts: List<Account>, val skipped: Int, val owners: List<Owner> = emptyList())
 
 object Codec {
     val json = Json {
@@ -59,8 +78,8 @@ object Codec {
         prettyPrint = true
     }
 
-    fun export(list: List<Account>): String =
-        json.encodeToString(BackupFile(exportedAt = Instant.now().toString(), accounts = list))
+    fun export(list: List<Account>, owners: List<Owner> = emptyList()): String =
+        json.encodeToString(BackupFile(exportedAt = Instant.now().toString(), owners = owners, accounts = list))
 
     fun fileName(today: LocalDate = LocalDate.now()) = "so-tiet-kiem-$today.json"
 
@@ -84,7 +103,13 @@ object Codec {
             val a = (el as? JsonObject)?.let(::toAccount)
             if (a == null) skipped++ else out.add(a)
         }
-        return ImportResult(out, skipped)
+        val owners = ((root as? JsonObject)?.get("owners") as? JsonArray).orEmpty().mapNotNull { el ->
+            val o = el as? JsonObject ?: return@mapNotNull null
+            val id = o.str("id")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val name = o.str("name")?.trim()?.take(40)?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            Owner(id, name)
+        }.distinctBy { it.id }
+        return ImportResult(out, skipped, owners)
     }
 
     private fun JsonObject.str(k: String): String? {
@@ -129,6 +154,20 @@ object Codec {
             closedAt = if (closed) o.str("closedAt")?.take(10) ?: LocalDate.now().toString() else null,
             createdAt = o.str("createdAt") ?: now,
             updatedAt = o.str("updatedAt") ?: now,
+            owners = parseShares(o, amount),
         )
+    }
+
+    /** Phần tiền từng người; chỉ giữ khi hợp lệ (mỗi phần > 0, không trùng người, tổng bằng số tiền gửi). */
+    private fun parseShares(o: JsonObject, amount: Long): List<OwnerShare> {
+        val arr = o["owners"] as? JsonArray ?: return emptyList()
+        val shares = arr.mapNotNull { el ->
+            val s = el as? JsonObject ?: return@mapNotNull null
+            val id = s.str("ownerId")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val amt = s.num("amount")?.toLong()?.takeIf { it > 0 } ?: return@mapNotNull null
+            OwnerShare(id, amt)
+        }
+        return if (shares.isNotEmpty() && shares.distinctBy { it.ownerId }.size == shares.size && shares.sumOf { it.amount } == amount)
+            shares else emptyList()
     }
 }

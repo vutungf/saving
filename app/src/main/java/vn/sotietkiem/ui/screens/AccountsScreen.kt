@@ -34,6 +34,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import vn.sotietkiem.data.Account
+import vn.sotietkiem.data.Owner
+import vn.sotietkiem.domain.OwnerScope
+import vn.sotietkiem.ui.components.OwnerAvatar
+import vn.sotietkiem.ui.components.ownerColor
+import androidx.compose.material.icons.outlined.Person
 import vn.sotietkiem.domain.Calc
 import vn.sotietkiem.domain.Status
 import vn.sotietkiem.ui.components.AccountActions
@@ -58,6 +63,7 @@ private enum class SortBy(val label: String) {
 @Composable
 fun AccountsScreen(
     accounts: List<Account>,
+    owners: List<Owner>,
     nowMillis: Long,
     contentPadding: PaddingValues,
     actions: AccountActions,
@@ -68,12 +74,20 @@ fun AccountsScreen(
     var sort by rememberSaveable { mutableStateOf(SortBy.MATURITY) }
     var sortMenu by remember { mutableStateOf(false) }
     var bankMenu by remember { mutableStateOf(false) }
+    var owner by rememberSaveable { mutableStateOf(OwnerScope.ALL) }
 
     val banks = accounts.map { it.bankName }.distinct().sorted()
     val fq = Fmt.fold(query.trim())
     val shown = accounts
         .filter { filter.status == null || Calc.status(it) == filter.status }
         .filter { bank == null || it.bankName == bank }
+        .filter { a ->
+            when (if (owner == OwnerScope.ALL || owner == OwnerScope.UNASSIGNED || owners.any { it.id == owner }) owner else OwnerScope.ALL) {
+                OwnerScope.ALL -> true
+                OwnerScope.UNASSIGNED -> a.owners.isEmpty()
+                else -> a.owners.any { it.ownerId == owner }
+            }
+        }
         .filter { fq.isEmpty() || Fmt.fold("${it.name} ${it.bankName} ${it.bankCode} ${it.note}").contains(fq) }
         .let { list ->
             when (sort) {
@@ -103,13 +117,34 @@ fun AccountsScreen(
                     placeholder = { Text("Tìm theo tên sổ, ngân hàng, ghi chú") },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (owners.isNotEmpty()) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = owner == OwnerScope.ALL, onClick = { owner = OwnerScope.ALL },
+                            label = { Text("Mọi người") }, leadingIcon = { Icon(Icons.Outlined.Person, null) },
+                        )
+                        owners.forEach { o ->
+                            val n = accounts.count { a -> a.owners.any { it.ownerId == o.id } }
+                            FilterChip(
+                                selected = owner == o.id, onClick = { owner = o.id },
+                                label = { Text("${o.name} ($n)") },
+                                leadingIcon = { OwnerAvatar(o.name, ownerColor(owners, o.id), 20.dp) },
+                            )
+                        }
+                        val none = accounts.count { it.owners.isEmpty() }
+                        if (none > 0) {
+                            FilterChip(selected = owner == OwnerScope.UNASSIGNED, onClick = { owner = OwnerScope.UNASSIGNED },
+                                label = { Text("Chưa gán ($none)") })
+                        }
+                    }
+                }
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     StatusFilter.entries.forEach { f ->
                         val n = if (f.status == null) accounts.size else accounts.count { Calc.status(it) == f.status }
                         FilterChip(selected = filter == f, onClick = { filter = f }, label = { Text("${f.label} ($n)") })
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box {
                         AssistChip(
                             onClick = { bankMenu = true },
@@ -144,6 +179,6 @@ fun AccountsScreen(
                 )
             }
         }
-        items(shown, key = { it.id }) { a -> AccountCard(a, actions, nowMillis) }
+        items(shown, key = { it.id }) { a -> AccountCard(a, actions, nowMillis, owners) }
     }
 }

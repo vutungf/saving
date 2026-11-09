@@ -42,8 +42,8 @@ import kotlin.math.roundToInt
 
 /** Biểu đồ tròn (dạng vành khuyên) kèm chú thích số tiền và tỷ lệ. */
 @Composable
-fun BankDonut(slices: List<Slice>) {
-    val palette = LocalExtra.current.chart
+fun BankDonut(slices: List<Slice>, unit: String = "ngân hàng", colors: List<Color>? = null) {
+    val palette = colors ?: LocalExtra.current.chart
     val total = slices.sumOf { it.amount }.coerceAtLeast(1)
     val track = MaterialTheme.colorScheme.surfaceVariant
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -66,7 +66,7 @@ fun BankDonut(slices: List<Slice>) {
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("${slices.size}", style = MaterialTheme.typography.titleLarge)
-                Text("ngân hàng", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {

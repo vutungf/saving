@@ -38,12 +38,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import vn.sotietkiem.data.Account
+import vn.sotietkiem.data.Owner
 import vn.sotietkiem.data.InterestPayout
 import vn.sotietkiem.domain.Calc
 import vn.sotietkiem.domain.Status
 import vn.sotietkiem.util.Fmt
 
 interface AccountActions {
+    fun open(a: Account)
     fun edit(a: Account)
     fun delete(a: Account)
     fun renew(a: Account)
@@ -52,13 +54,13 @@ interface AccountActions {
 }
 
 @Composable
-fun AccountCard(a: Account, actions: AccountActions, nowMillis: Long) {
+fun AccountCard(a: Account, actions: AccountActions, nowMillis: Long, owners: List<Owner> = emptyList()) {
     val status = Calc.status(a)
     val left = Calc.daysLeft(a)
     var menu by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
 
-    SectionCard(modifier = Modifier.clip(RoundedCornerShape(18.dp)).clickable { actions.edit(a) }) {
+    SectionCard(modifier = Modifier.clip(RoundedCornerShape(18.dp)).clickable { actions.open(a) }) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             BankLogo(a.bankCode, a.bankName, 42.dp)
             Column(Modifier.weight(1f)) {
@@ -125,6 +127,8 @@ fun AccountCard(a: Account, actions: AccountActions, nowMillis: Long) {
             )
         }
 
+        if (a.owners.isNotEmpty()) OwnerShareLine(a, owners)
+
         if (a.note.isNotBlank()) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(Icons.AutoMirrored.Outlined.StickyNote2, null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -168,3 +172,22 @@ private fun Info(label: String, value: String, modifier: Modifier = Modifier) {
 
 /** Số tiền gửi mới khi tái tục: lĩnh lãi cuối kỳ thì gốc + lãi, còn lại giữ nguyên gốc. */
 fun renewAmount(a: Account): Long = if (a.interestPayout == InterestPayout.MATURITY) Calc.total(a) else a.amount
+
+/** Dòng người sở hữu trên thẻ sổ: "Bố 100 tr · Mẹ 50 tr". */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun OwnerShareLine(a: Account, owners: List<Owner>) {
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        a.owners.forEach { sh ->
+            val name = owners.firstOrNull { it.id == sh.ownerId }?.name ?: "?"
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            OwnerAvatar(name, ownerColor(owners, sh.ownerId), 18.dp)
+            Text(
+                if (a.owners.size == 1) name else "$name ${Fmt.short(sh.amount)}",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            }
+        }
+    }
+}

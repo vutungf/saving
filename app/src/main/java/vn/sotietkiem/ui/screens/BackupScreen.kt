@@ -34,6 +34,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +51,7 @@ import vn.sotietkiem.data.Codec
 import vn.sotietkiem.data.ImportResult
 import vn.sotietkiem.ui.AppViewModel
 import vn.sotietkiem.ui.components.ConfirmDialog
+import vn.sotietkiem.ui.components.OwnersCard
 import vn.sotietkiem.ui.components.SectionCard
 import vn.sotietkiem.util.Fmt
 import java.time.Instant
@@ -82,7 +84,7 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val json = Codec.export(vm.accounts.value)
+        val json = Codec.export(vm.accounts.value, vm.owners.value)
         val ok = runCatching { ctx.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) } != null }.getOrDefault(false)
         if (ok) { vm.markExported(); toast("Đã xuất $count sổ") } else showJson = json
     }
@@ -100,12 +102,19 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
             .padding(contentPadding).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        OwnersCard(vm)
+
         SectionCard("Xuất file JSON") {
             Text(
                 "Lưu toàn bộ $count sổ ra file ${Codec.fileName()}. " +
                     if (lastExport == 0L) "Bạn chưa xuất file lần nào." else "Lần xuất gần nhất: ${Fmt.date(Instant.ofEpochMilli(lastExport).atZone(ZoneId.systemDefault()).toLocalDate())}.",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            val lastChange by vm.lastChange.collectAsState()
+            if (count > 0 && lastChange > lastExport) {
+                Text("Có thay đổi chưa được lưu ra file JSON.", style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { exportLauncher.launch(Codec.fileName()) }, enabled = count > 0, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Outlined.FileDownload, null); Text(" Lưu file")
@@ -113,7 +122,7 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
                 FilledTonalButton(
                     enabled = count > 0, modifier = Modifier.weight(1f),
                     onClick = {
-                        val json = Codec.export(vm.accounts.value)
+                        val json = Codec.export(vm.accounts.value, vm.owners.value)
                         val send = Intent(Intent.ACTION_SEND).apply {
                             type = "application/json"
                             putExtra(Intent.EXTRA_SUBJECT, Codec.fileName().removeSuffix(".json"))
@@ -125,7 +134,7 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
                     },
                 ) { Icon(Icons.Outlined.Share, null); Text(" Chia sẻ") }
             }
-            TextButton(enabled = count > 0, onClick = { showJson = Codec.export(vm.accounts.value) }) { Text("Xem nội dung JSON để sao chép") }
+            TextButton(enabled = count > 0, onClick = { showJson = Codec.export(vm.accounts.value, vm.owners.value) }) { Text("Xem nội dung JSON để sao chép") }
         }
 
         SectionCard("Nhập file JSON") {
@@ -183,7 +192,7 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val n = vm.importMerge(r.accounts); pending = null
+                    val n = vm.importMerge(r.accounts, r.owners); pending = null
                     toast("Đã thêm $n sổ" + if (n < r.accounts.size) ", bỏ qua ${r.accounts.size - n} sổ trùng" else "")
                 }) { Text("Gộp vào hiện tại") }
             },
@@ -198,7 +207,7 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
             title = "Thay thế toàn bộ?",
             text = "$count sổ hiện có sẽ bị xóa và thay bằng ${r?.accounts?.size ?: 0} sổ trong file.",
             confirm = "Thay thế", danger = true,
-            onConfirm = { r?.let { vm.importReplace(it.accounts); toast("Đã thay thế dữ liệu") }; pending = null },
+            onConfirm = { r?.let { vm.importReplace(it.accounts, it.owners); toast("Đã thay thế dữ liệu") }; pending = null },
             onDismiss = { confirmReplace = false },
         )
     }

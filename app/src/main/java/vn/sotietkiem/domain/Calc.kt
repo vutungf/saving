@@ -141,3 +141,16 @@ fun cashflow12(accounts: List<Account>, today: LocalDate = LocalDate.now()): Lis
     }
     return months.mapIndexed { i, d -> MonthBucket(d.year, d.monthValue, sums[i][0], sums[i][1]) }
 }
+
+/** Kết quả "tính đến ngày": các sổ có ngày đáo hạn từ trước đến hết [date]. */
+data class MaturedBy(val accounts: List<Account>, val principal: Long, val interest: Long) {
+    val total get() = principal + interest
+}
+
+fun maturedBy(accounts: List<Account>, date: java.time.LocalDate, includeClosed: Boolean): MaturedBy {
+    val list = accounts
+        .filter { includeClosed || !it.closed }
+        .filter { !Calc.maturity(it).isAfter(date) }
+        .sortedBy { Calc.maturity(it) }
+    return MaturedBy(list, list.sumOf { it.amount }, list.sumOf { Calc.interest(it) })
+}

@@ -65,6 +65,15 @@ import vn.sotietkiem.ui.components.BankLogo
 import vn.sotietkiem.ui.components.SectionCard
 import vn.sotietkiem.ui.components.ThousandsTransformation
 import vn.sotietkiem.ui.components.renewAmount
+import vn.sotietkiem.ui.components.OwnerAvatar
+import vn.sotietkiem.ui.components.OwnerNameDialog
+import vn.sotietkiem.ui.components.ownerColor
+import vn.sotietkiem.data.Owner
+import vn.sotietkiem.data.OwnerShare
+import vn.sotietkiem.domain.scaleShares
+import vn.sotietkiem.domain.splitEven
+import androidx.compose.material.icons.outlined.PersonAdd
+import androidx.compose.material3.AssistChip
 import vn.sotietkiem.util.Fmt
 import vn.sotietkiem.util.VnWords
 import java.time.Instant
@@ -80,6 +89,8 @@ fun FormScreen(
     editing: Account?,
     renewFrom: Account?,
     suggestedName: String = "",
+    owners: List<Owner> = emptyList(),
+    onAddOwner: (String) -> Owner = { Owner("", it) },
     onSave: (Account, String?) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -103,6 +114,20 @@ fun FormScreen(
     var rate by rememberSaveable { mutableStateOf(base?.interestRate?.let { Fmt.rate(it).removeSuffix("%") }.orEmpty()) }
     var payout by rememberSaveable { mutableStateOf(base?.interestPayout ?: InterestPayout.MATURITY) }
     var note by rememberSaveable { mutableStateOf(if (renewFrom != null) renewFrom.note else editing?.note.orEmpty()) }
+    // Phần tiền từng người sở hữu, lưu dạng "id=sốtiền;id=sốtiền" để giữ được khi xoay màn hình.
+    var sharesRaw by rememberSaveable {
+        mutableStateOf(
+            encodeShares(
+                when {
+                    renewFrom != null -> scaleShares(renewFrom.owners, renewFrom.amount, renewAmount(renewFrom))
+                    editing != null -> editing.owners
+                    owners.size == 1 -> listOf(OwnerShare(owners[0].id, 0))
+                    else -> emptyList()
+                }
+            )
+        )
+    }
+    var addingOwner by remember { mutableStateOf(false) }
     var submitted by rememberSaveable { mutableStateOf(false) }
     var touched by remember { mutableStateOf(setOf<String>()) }
     var showBanks by remember { mutableStateOf(false) }
@@ -120,6 +145,11 @@ fun FormScreen(
         if (startVal == null) put("start", "Ngày gửi không hợp lệ")
         if (termVal == null || termVal !in 1..600) put("term", "Kỳ hạn từ 1 đến 600 tháng")
         if (rateVal == null || rateVal < 0 || rateVal > 100) put("rate", "Lãi suất từ 0 đến 100%/năm")
+        val sel = decodeShares(sharesRaw)
+        if (sel.size >= 2 && amountVal != null && amountVal > 0) {
+            if (sel.any { it.amount <= 0 }) put("owners", "Nhập số tiền cho từng người")
+            else if (sel.sumOf { it.amount } != amountVal) put("owners", "Tổng phần của từng người phải bằng số tiền gửi")
+        }
     }
     fun err(k: String) = if (submitted || k in touched) errors[k] else null
     fun touch(k: String) { if (k !in touched) touched = touched + k }
@@ -184,6 +214,15 @@ fun FormScreen(
                 isError = err("amount") != null,
                 supportingText = { Text(err("amount") ?: amountVal?.takeIf { it > 0 }?.let { VnWords.read(it) } ?: "") },
                 modifier = Modifier.fillMaxWidth(),
+            )
+
+            OwnerSharesEditor(
+                owners = owners,
+                raw = sharesRaw,
+                total = amountVal ?: 0L,
+                error = if (submitted || "amount" in touched) errors["owners"] else null,
+                onChange = { sharesRaw = it },
+                onAddOwner = { addingOwner = true },
             )
 
             OutlinedTextField(
@@ -280,6 +319,7 @@ fun FormScreen(
                             interestPayout = payout,
                             bankCode = bankCode.ifBlank { Banks.OTHER },
                             bankName = bankName.trim(),
+                            owners = finalShares(decodeShares(sharesRaw), amountVal!!),
                             note = note.trim(),
                             closed = editing?.closed ?: false,
                             closedAt = editing?.closedAt,
@@ -297,6 +337,14 @@ fun FormScreen(
             }
             Spacer(Modifier.height(24.dp))
         }
+    }
+
+    if (addingOwner) {
+        OwnerNameDialog("Thêm người sở hữu", onDone = { n ->
+            val o = onAddOwner(n)
+            val cur = decodeShares(sharesRaw)
+            if (cur.none { it.ownerId == o.id }) sharesRaw = encodeShares(cur + OwnerShare(o.id, 0))
+        }, onDismiss = { addingOwner = false })
     }
 
     if (showBanks) {
@@ -412,4 +460,106 @@ private fun logoOrNull(code: String, name: String): (@Composable () -> Unit)? {
 private fun textOrNull(s: String?): (@Composable () -> Unit)? {
     if (s == null) return null
     return { Text(s) }
+}
+
+// ---- Người sở hữu ----
+
+private fun encodeShares(list: List<OwnerShare>) = list.joinToString(";") { "${it.ownerId}=${it.amount}" }
+
+private fun decodeShares(raw: String): List<OwnerShare> =
+    raw.split(';').filter { '=' in it }.map { OwnerShare(it.substringBefore('='), it.substringAfter('=').toLongOrNull() ?: 0L) }
+
+/** Một người: toàn bộ số tiền thuộc về người đó. Nhiều người: dùng số đã nhập. Không ai: chưa gán. */
+private fun finalShares(sel: List<OwnerShare>, amount: Long): List<OwnerShare> = when (sel.size) {
+    0 -> emptyList()
+    1 -> listOf(OwnerShare(sel[0].ownerId, amount))
+    else -> sel
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun OwnerSharesEditor(
+    owners: List<Owner>,
+    raw: String,
+    total: Long,
+    error: String?,
+    onChange: (String) -> Unit,
+    onAddOwner: () -> Unit,
+) {
+    val sel = decodeShares(raw).filter { s -> owners.any { it.id == s.ownerId } }
+    fun nameOf(id: String) = owners.firstOrNull { it.id == id }?.name ?: "?"
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Người sở hữu", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            owners.forEach { o ->
+                val on = sel.any { it.ownerId == o.id }
+                FilterChip(
+                    selected = on,
+                    onClick = {
+                        onChange(
+                            encodeShares(
+                                when {
+                                    on -> sel.filterNot { it.ownerId == o.id }
+                                    // từ 1 lên 2 người: chia đều trước, người dùng sửa lại nếu cần
+                                    sel.size == 1 && total > 0 -> splitEven(sel.map { it.ownerId } + o.id, total)
+                                    else -> sel + OwnerShare(o.id, (total - sel.sumOf { it.amount }).coerceAtLeast(0))
+                                }
+                            )
+                        )
+                    },
+                    label = { Text(o.name) },
+                    leadingIcon = { OwnerAvatar(o.name, ownerColor(owners, o.id), 20.dp) },
+                )
+            }
+            AssistChip(onClick = onAddOwner, label = { Text("Thêm người") }, leadingIcon = { Icon(Icons.Outlined.PersonAdd, null) })
+        }
+        when (sel.size) {
+            0 -> Text(
+                if (owners.isEmpty()) "Chưa có người sở hữu nào. Bấm Thêm người để tạo (không bắt buộc)."
+                else "Chưa gán người sở hữu (không bắt buộc).",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            1 -> Text(
+                "Toàn bộ ${if (total > 0) Fmt.vnd(total) else "số tiền"} thuộc về ${nameOf(sel[0].ownerId)}.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            else -> {
+                sel.forEach { sh ->
+                    OutlinedTextField(
+                        value = if (sh.amount > 0) sh.amount.toString() else "",
+                        onValueChange = { v ->
+                            val n = v.filter { it.isDigit() }.trimStart('0').take(15).toLongOrNull() ?: 0L
+                            onChange(encodeShares(sel.map { if (it.ownerId == sh.ownerId) it.copy(amount = n) else it }))
+                        },
+                        label = { Text("Phần của ${nameOf(sh.ownerId)}") },
+                        leadingIcon = { OwnerAvatar(nameOf(sh.ownerId), ownerColor(owners, sh.ownerId), 24.dp) },
+                        singleLine = true,
+                        visualTransformation = ThousandsTransformation,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        suffix = { Text("₫") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                val sum = sel.sumOf { it.amount }
+                val rest = total - sum
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        when {
+                            rest == 0L -> "Đã chia đủ ${Fmt.vnd(total)}"
+                            rest > 0 -> "Còn thiếu ${Fmt.vnd(rest)}"
+                            else -> "Vượt ${Fmt.vnd(-rest)}"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (rest == 0L) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(enabled = total > 0, onClick = { onChange(encodeShares(splitEven(sel.map { it.ownerId }, total))) }) {
+                        Text("Chia đều")
+                    }
+                }
+            }
+        }
+        if (error != null) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+    }
 }

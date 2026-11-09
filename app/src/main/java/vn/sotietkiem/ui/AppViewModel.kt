@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import vn.sotietkiem.data.Account
 import vn.sotietkiem.data.Banks
 import vn.sotietkiem.data.InterestPayout
+import vn.sotietkiem.data.Owner
 import vn.sotietkiem.data.Repository
 import vn.sotietkiem.domain.Calc
 import java.time.Instant
@@ -20,15 +21,63 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _accounts = MutableStateFlow(repo.load())
     val accounts: StateFlow<List<Account>> = _accounts.asStateFlow()
 
+    private val _owners = MutableStateFlow(repo.loadOwners())
+    val owners: StateFlow<List<Owner>> = _owners.asStateFlow()
+
     private val _lastExport = MutableStateFlow(repo.lastExportAt)
     val lastExport: StateFlow<Long> = _lastExport.asStateFlow()
+
+    private val _lastChange = MutableStateFlow(repo.lastChangeAt)
+    val lastChange: StateFlow<Long> = _lastChange.asStateFlow()
+
+    /** Ghi nhận mỗi lần dữ liệu đổi, để nhắc người dùng xuất file JSON. */
+    private fun touch() {
+        val t = System.currentTimeMillis()
+        repo.lastChangeAt = t
+        _lastChange.value = t
+    }
 
     private fun commit(list: List<Account>) {
         _accounts.value = list
         repo.save(list)
+        touch()
     }
 
     fun get(id: String): Account? = _accounts.value.firstOrNull { it.id == id }
+
+    // ---- Người sở hữu ----
+    private fun commitOwners(list: List<Owner>) {
+        _owners.value = list
+        repo.saveOwners(list)
+        touch()
+    }
+
+    /** Thêm người sở hữu mới; trùng tên (không phân biệt hoa thường) thì trả về người đã có. */
+    fun addOwner(name: String): Owner {
+        val n = name.trim().take(40)
+        _owners.value.firstOrNull { it.name.equals(n, ignoreCase = true) }?.let { return it }
+        val o = Owner(UUID.randomUUID().toString(), n)
+        commitOwners(_owners.value + o)
+        return o
+    }
+
+    fun renameOwner(id: String, name: String) =
+        commitOwners(_owners.value.map { if (it.id == id) it.copy(name = name.trim().take(40)) else it })
+
+    /** Số sổ đang có phần của người này. Chỉ xóa được người không còn sổ nào. */
+    fun ownerUsage(id: String): Int = _accounts.value.count { a -> a.owners.any { it.ownerId == id } }
+
+    fun deleteOwner(id: String): Boolean {
+        if (ownerUsage(id) > 0) return false
+        commitOwners(_owners.value.filterNot { it.id == id })
+        return true
+    }
+
+    /** Bỏ phần của người không có trong danh sách; nếu vì thế tổng lệch thì coi như chưa gán. */
+    private fun sanitize(a: Account, ids: Set<String>): Account {
+        if (a.owners.all { it.ownerId in ids }) return a
+        return a.copy(owners = emptyList())
+    }
 
     /** Thêm hoặc sửa. Nếu [renewFromId] khác null thì sổ cũ chuyển sang Đã tất toán. */
     fun upsert(a: Account, renewFromId: String? = null) {
@@ -58,16 +107,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     })
 
     /** Gộp: sổ trùng ID bị bỏ qua. Trả về số sổ đã thêm. */
-    fun importMerge(items: List<Account>): Int {
+    fun importMerge(items: List<Account>, owners: List<Owner> = emptyList()): Int {
+        val known = _owners.value.map { it.id }.toHashSet()
+        val merged = _owners.value + owners.filter { known.add(it.id) }
+        commitOwners(merged)
         val ids = _accounts.value.map { it.id }.toHashSet()
-        val fresh = items.filter { ids.add(it.id) }
+        val fresh = items.filter { ids.add(it.id) }.map { sanitize(it, known) }
         commit(_accounts.value + fresh)
         return fresh.size
     }
 
-    fun importReplace(items: List<Account>) = commit(items.distinctBy { it.id })
+    fun importReplace(items: List<Account>, owners: List<Owner> = emptyList()) {
+        val list = owners.distinctBy { it.id }
+        commitOwners(list)
+        val ids = list.map { it.id }.toSet()
+        commit(items.distinctBy { it.id }.map { sanitize(it, ids) })
+    }
 
-    fun clearAll() = commit(emptyList())
+    fun clearAll() {
+        commit(emptyList())
+        commitOwners(emptyList())
+    }
 
     fun markExported() {
         val t = System.currentTimeMillis()
