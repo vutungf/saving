@@ -1,6 +1,10 @@
 # Sổ tiết kiệm (Android)
 
-App Android native (Kotlin + Jetpack Compose) dựa trên spec trong `Claude.md`. App theo dõi các sổ tiết kiệm ở ngân hàng Việt Nam, tính tiền lãi, ngày đáo hạn và thống kê, kể cả thống kê riêng theo từng người sở hữu. Dữ liệu chỉ nằm trên máy và được sao lưu bằng file JSON. File JSON giữ định dạng của bản web, có thêm phần người sở hữu.
+App Android native (Kotlin + Jetpack Compose). App theo dõi các sổ tiết kiệm ở ngân hàng Việt Nam, tính tiền lãi, ngày đáo hạn và thống kê, kể cả thống kê riêng theo từng người sở hữu. Dữ liệu chỉ nằm trên máy và được sao lưu bằng file JSON. File JSON tương thích với bản web một file HTML, có thêm phần người sở hữu và mục tiêu.
+
+- **Tiền tệ:** chỉ dùng VND.
+- **Lưu trữ:** chỉ trên điện thoại, không gửi lên máy chủ nào.
+- **Sao lưu:** xuất và nhập lại bằng file JSON. Gỡ app hoặc xóa dữ liệu app thì các sổ sẽ mất, nên hãy xuất file định kỳ.
 
 ## Tính năng
 
@@ -82,9 +86,17 @@ App Android native (Kotlin + Jetpack Compose) dựa trên spec trong `Claude.md`
   - *Đã tất toán:* người dùng đã đóng sổ.
 - **Theo người sở hữu:** mỗi sổ chỉ tính phần gốc của người đó. Lãi đơn tỷ lệ thuận với gốc, nên lãi của từng người cũng chia theo tỷ lệ đó.
 
-## Định dạng file JSON
+## Danh sách ngân hàng
 
-Định dạng giống bản web (mục 4 của `Claude.md`), có thêm hai phần:
+58 ngân hàng, logo lấy từ bộ dữ liệu VietQR và nhúng sẵn trong app nên vẫn hiện khi không có mạng.
+
+- **Ngân hàng số:** Cake, Ubank, Timo, Vikki, PVcomBank Pay, TNEX, Liobank, Digimi.
+- **Ngân hàng thương mại trong nước:** Vietcombank, VietinBank, BIDV, Agribank, Techcombank, MB Bank, ACB, VPBank, TPBank, Sacombank, HDBank, VIB, SHB, Eximbank, MSB, OCB, SeABank, LPBank, BVBank, Nam A Bank, Bac A Bank, ABBANK, PVcomBank, NCB, PGBank, VietBank, VietABank, BaoViet Bank, KienlongBank, Saigonbank, SCB, MBV, CB Bank, GPBank, Co-opBank.
+- **Ngân hàng nước ngoài và liên doanh:** HSBC, Standard Chartered, Shinhan Bank, Woori Bank, UOB, CIMB, Public Bank, Hong Leong, KEB Hana, Kookmin, IBK, DBS Bank, KBank, Indovina Bank, VRB.
+
+TNEX, Liobank, Digimi và ngân hàng tự nhập tên không có logo, nên app hiện huy hiệu chữ cái có màu thay thế.
+
+## Định dạng file JSON
 
 ```json
 {
@@ -94,14 +106,25 @@ App Android native (Kotlin + Jetpack Compose) dựa trên spec trong `Claude.md`
   "exportedAt": "2026-11-09T10:00:00.000Z",
   "owners": [
     { "id": "a1b2...", "name": "Cha", "goalAmount": 1000000000, "goalDate": "2027-12-31" },
-    { "id": "c3d4...", "name": "Mẹ" }
+    { "id": "c3d4...", "name": "Mẹ", "goalAmount": null, "goalDate": null }
   ],
   "accounts": [
     {
       "id": "3f2b6c1e-...",
       "name": "Tiết kiệm 1",
       "amount": 150000000,
-      "...": "các trường khác như bản web",
+      "startDate": "2026-04-09",
+      "termMonths": 12,
+      "maturityDate": "2027-04-09",
+      "interestRate": 4.8,
+      "interestPayout": "maturity",
+      "bankCode": "VCB",
+      "bankName": "Vietcombank",
+      "note": "Sổ giấy, chi nhánh Bến Thành",
+      "closed": false,
+      "closedAt": null,
+      "createdAt": "2026-11-09T08:00:00.000Z",
+      "updatedAt": "2026-11-09T08:00:00.000Z",
       "owners": [
         { "ownerId": "a1b2...", "amount": 100000000 },
         { "ownerId": "c3d4...", "amount": 50000000 }
@@ -111,17 +134,40 @@ App Android native (Kotlin + Jetpack Compose) dựa trên spec trong `Claude.md`
 }
 ```
 
-| Trường | Ý nghĩa |
-|---|---|
-| `owners` (gốc file) | Danh sách người sở hữu: `id`, `name`, và mục tiêu nếu có: `goalAmount` (VND), `goalDate` (`YYYY-MM-DD`, có thể `null`) |
-| `accounts[].owners` | Phần tiền của từng người trong sổ. Mảng rỗng nghĩa là *Chưa gán* |
+**Người sở hữu** (`owners` ở gốc file):
+
+| Trường | Kiểu | Ý nghĩa |
+|---|---|---|
+| `id` | chuỗi | Mã người sở hữu |
+| `name` | chuỗi | Tên hiển thị, tối đa 40 ký tự |
+| `goalAmount` | số nguyên hoặc `null` | Mục tiêu tiền gốc (VND) |
+| `goalDate` | `YYYY-MM-DD` hoặc `null` | Hạn đạt mục tiêu, không bắt buộc |
+
+**Sổ tiết kiệm** (`accounts`):
+
+| Trường | Kiểu | Ý nghĩa |
+|---|---|---|
+| `id` | chuỗi | Mã sổ |
+| `name` | chuỗi | Tên sổ, tối đa 80 ký tự |
+| `amount` | số nguyên | Tiền gốc (VND) |
+| `startDate`, `maturityDate`, `closedAt` | `YYYY-MM-DD` | Ngày gửi, ngày đáo hạn, ngày tất toán. `maturityDate` chỉ để tham khảo; khi nhập file, app tự tính lại |
+| `termMonths` | số nguyên | Kỳ hạn tính theo tháng, từ 1 đến 600 |
+| `interestRate` | số | Lãi suất %/năm, từ 0 đến 100 |
+| `interestPayout` | chuỗi | `maturity` (cuối kỳ), `monthly` (hàng tháng) hoặc `upfront` (đầu kỳ) |
+| `bankCode` | chuỗi | Mã ngân hàng (VCB, BIDV, TCB, CAKE...), hoặc `OTHER` nếu tự nhập tên |
+| `bankName` | chuỗi | Tên ngân hàng để hiển thị |
+| `note` | chuỗi | Ghi chú, tối đa 500 ký tự |
+| `closed` | boolean | Sổ đã tất toán hay chưa |
+| `owners` | mảng | Phần tiền của từng người: `ownerId` và `amount`. Mảng rỗng nghĩa là *Chưa gán* |
 
 Quy tắc khi nhập file:
 
+- App chấp nhận một trong ba dạng: object có mảng `accounts`, object có mảng `books`, hoặc một mảng sổ trực tiếp.
+- Mỗi sổ phải có tên, số tiền lớn hơn 0, ngày gửi hợp lệ, kỳ hạn từ 1 đến 600 tháng và lãi suất từ 0 đến 100%. Sổ nào thiếu hoặc sai thì bị bỏ qua.
 - File cũ không có `owners` vẫn nhập được; các sổ sẽ là *Chưa gán*.
 - Phần người sở hữu của một sổ chỉ được giữ khi mỗi phần lớn hơn 0, không trùng người và tổng bằng `amount`. Sai thì sổ vẫn được nhập nhưng thành *Chưa gán*.
 - Phần nào trỏ tới người không có trong danh sách thì sổ đó thành *Chưa gán*.
-- *Gộp* thêm những người sở hữu chưa có (theo `id`). *Thay thế* dùng danh sách người trong file.
+- *Gộp* thêm những người sở hữu chưa có (theo `id`) và bỏ qua sổ trùng `id`. *Thay thế* dùng danh sách người và sổ trong file.
 
 ## Build
 
@@ -161,7 +207,7 @@ app/src/main/java/vn/sotietkiem/
   ui/components/                  thẻ sổ, logo, biểu đồ, tính tiền về đến ngày, người sở hữu, hộp thoại
 ```
 
-## Khác biệt so với bản web
+## Khác biệt so với bản web (file HTML)
 
 | Bản web | Bản Android |
 |---|---|
@@ -175,4 +221,4 @@ app/src/main/java/vn/sotietkiem/
 | — | Tính tiền về đến một ngày chọn |
 | — | Tên sổ tự động "Tiết kiệm N" |
 | — | Nhắc sao lưu khi có thay đổi chưa xuất file |
-| — | Thông báo nhắc đáo hạn (mục 7 của spec) |
+| — | Thông báo nhắc đáo hạn |
