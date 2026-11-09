@@ -109,6 +109,7 @@ private fun App(vm: AppViewModel) {
             FormScreen(
                 editing = editing,
                 renewFrom = renewFrom,
+                suggestedName = suggestName(accounts),
                 onSave = { acc, renewId ->
                     val isNew = editing == null
                     vm.upsert(acc, renewId)
@@ -182,4 +183,11 @@ private fun App(vm: AppViewModel) {
             onDismiss = { askClose = null },
         )
     }
+}
+
+/** Tên gợi ý cho sổ mới: "Tiết kiệm N", với N lớn hơn số lớn nhất đang dùng để không bị trùng. */
+private fun suggestName(accounts: List<Account>): String {
+    val re = Regex("""^\s*Tiết kiệm\s+(\d+)\s*$""", RegexOption.IGNORE_CASE)
+    val max = accounts.mapNotNull { re.find(it.name)?.groupValues?.get(1)?.toIntOrNull() }.maxOrNull() ?: 0
+    return "Tiết kiệm ${max + 1}"
 }

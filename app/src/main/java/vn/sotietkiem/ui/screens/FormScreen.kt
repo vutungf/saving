@@ -79,11 +79,12 @@ private val QUICK_TERMS = listOf(1, 3, 6, 9, 12, 18, 24, 36)
 fun FormScreen(
     editing: Account?,
     renewFrom: Account?,
+    suggestedName: String = "",
     onSave: (Account, String?) -> Unit,
     onBack: () -> Unit,
 ) {
     val base = editing ?: renewFrom
-    var name by rememberSaveable { mutableStateOf(base?.name.orEmpty()) }
+    var name by rememberSaveable { mutableStateOf(base?.name ?: suggestedName) }  // sổ mới: tên gợi ý, sửa được
     var bankCode by rememberSaveable { mutableStateOf(base?.bankCode.orEmpty()) }
     var bankName by rememberSaveable { mutableStateOf(base?.bankName.orEmpty()) }
     var amount by rememberSaveable {
@@ -159,7 +160,7 @@ fun FormScreen(
             OutlinedTextField(
                 value = bankName, onValueChange = {}, readOnly = true, enabled = false,
                 label = { Text("Ngân hàng") }, placeholder = { Text("Chọn ngân hàng") },
-                leadingIcon = if (bankName.isBlank()) null else @Composable { BankLogo(bankCode, bankName, 28.dp) },
+                leadingIcon = logoOrNull(bankCode, bankName),
                 trailingIcon = { Icon(Icons.Outlined.ExpandMore, null) },
                 isError = err("bank") != null, supportingText = textOrNull(err("bank")),
                 colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
@@ -401,6 +402,11 @@ private fun BankRow(b: Bank, onClick: () -> Unit) {
         leadingContent = { BankLogo(b.code, b.name, 36.dp) },
         modifier = Modifier.clickable(onClick = onClick),
     )
+}
+
+private fun logoOrNull(code: String, name: String): (@Composable () -> Unit)? {
+    if (name.isBlank()) return null
+    return { BankLogo(code, name, 28.dp) }
 }
 
 private fun textOrNull(s: String?): (@Composable () -> Unit)? {
