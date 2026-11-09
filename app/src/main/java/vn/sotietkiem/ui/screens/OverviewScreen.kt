@@ -52,6 +52,8 @@ import vn.sotietkiem.ui.components.ownerColor
 import vn.sotietkiem.data.Owner
 import vn.sotietkiem.domain.OwnerScope
 import vn.sotietkiem.domain.ownerAllocation
+import vn.sotietkiem.domain.goalOf
+import vn.sotietkiem.ui.components.GoalBar
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
@@ -110,6 +112,30 @@ fun OverviewScreen(
         }
 
         item { Hero(sum.principal, sum.openAccounts.size, sum.openAccounts.sumOf { Calc.accrued(it, nowMillis) }, sum.dailyInterest) }
+
+        // Mục tiêu tiền gốc: một người khi đang lọc theo người đó, hoặc tất cả người có mục tiêu
+        val goalOwners = owners.filter { (scope == OwnerScope.ALL || scope == it.id) && it.goalAmount != null }
+        if (goalOwners.isNotEmpty()) item {
+            SectionCard(if (scope == OwnerScope.ALL) "Mục tiêu" else "Mục tiêu của ${goalOwners[0].name}") {
+                goalOwners.forEachIndexed { i, o ->
+                    val g = goalOf(o, allAccounts) ?: return@forEachIndexed
+                    if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                            .clickable(enabled = scope == OwnerScope.ALL) { onScope(o.id) }.padding(vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        if (scope == OwnerScope.ALL) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OwnerAvatar(o.name, ownerColor(owners, o.id), 24.dp)
+                                Text(o.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                        GoalBar(g, ownerColor(owners, o.id))
+                    }
+                }
+            }
+        }
 
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

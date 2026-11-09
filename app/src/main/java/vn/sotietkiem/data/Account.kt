@@ -34,7 +34,14 @@ data class Account(
 
 /** Người sở hữu sổ (ví dụ: Bố, Mẹ, Con). */
 @Serializable
-data class Owner(val id: String, val name: String)
+data class Owner(
+    val id: String,
+    val name: String,
+    /** Mục tiêu tiền gốc đang gửi (VND). Null = chưa đặt mục tiêu. */
+    val goalAmount: Long? = null,
+    /** Hạn đạt mục tiêu, YYYY-MM-DD. Không bắt buộc. */
+    val goalDate: String? = null,
+)
 
 @Serializable
 data class OwnerShare(val ownerId: String, val amount: Long)

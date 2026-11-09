@@ -7,6 +7,7 @@ App Android native (Kotlin + Jetpack Compose) dựa trên spec trong `Claude.md`
 ### Tab Tổng quan
 
 - **Phạm vi thống kê:** chọn *Tất cả*, *từng người sở hữu* hoặc *Chưa gán*. Khi chọn một người, mọi con số chỉ tính phần tiền của người đó trong từng sổ.
+- **Mục tiêu:** ở chế độ *Tất cả*, liệt kê tiến độ mục tiêu của từng người đã đặt mục tiêu (bấm vào một người để xem thống kê riêng người đó). Khi đang xem một người, chỉ hiện mục tiêu của người đó.
 - **Khối chính:** tổng tiền gốc đang gửi (kèm số tiền bằng chữ và số sổ), lãi tích lũy tăng theo từng giây, lãi sinh thêm mỗi ngày.
 - **Dải số liệu:** lãi dự kiến cả kỳ, tổng nhận khi đáo hạn, lãi suất bình quân có trọng số theo số tiền, số sổ đang gửi.
 - **Đến hạn trong 30 ngày tới:** các sổ sắp hoặc đã đáo hạn. Bấm một dòng để mở trang chi tiết. Sổ đã đáo hạn có sẵn nút *Tái tục* và *Tất toán*.
@@ -57,7 +58,12 @@ App Android native (Kotlin + Jetpack Compose) dựa trên spec trong `Claude.md`
 
 ### Tab Cài đặt
 
-- **Người sở hữu:** thêm, đổi tên, xóa. Mỗi người có một màu riêng. Chỉ xóa được người không còn phần trong sổ nào.
+- **Người sở hữu:** thêm, sửa, xóa. Mỗi người có một màu riêng. Chỉ xóa được người không còn phần trong sổ nào.
+- **Mục tiêu cho từng người** (bấm biểu tượng bút chì):
+  - nhập số tiền mục tiêu và hạn (hạn không bắt buộc);
+  - tiến độ **chỉ tính tiền gốc** đang gửi của người đó (phần của họ trong các sổ chưa tất toán);
+  - app hiện thanh tiến độ, %, số còn thiếu, số ngày còn lại và số tiền cần gửi thêm mỗi tháng để kịp hạn;
+  - quá hạn mà chưa đạt thì dòng chữ chuyển màu đỏ; đạt rồi thì hiện "Đã đạt mục tiêu".
 - **Xuất file JSON:** lưu file `so-tiet-kiem-YYYY-MM-DD.json`, chia sẻ qua app khác, hoặc xem nội dung để sao chép. Có dòng chữ đỏ khi có thay đổi chưa lưu ra file.
 - **Nhập file JSON:** chọn file hoặc dán nội dung. Các mục sai bị bỏ qua. Sau đó chọn *Gộp vào hiện tại* (bỏ qua sổ trùng ID) hoặc *Thay thế toàn bộ* (có hỏi xác nhận).
 - **Nhắc đáo hạn:** thông báo trước 3 ngày và vào đúng ngày đáo hạn.
@@ -87,7 +93,7 @@ App Android native (Kotlin + Jetpack Compose) dựa trên spec trong `Claude.md`
   "currency": "VND",
   "exportedAt": "2026-11-09T10:00:00.000Z",
   "owners": [
-    { "id": "a1b2...", "name": "Cha" },
+    { "id": "a1b2...", "name": "Cha", "goalAmount": 1000000000, "goalDate": "2027-12-31" },
     { "id": "c3d4...", "name": "Mẹ" }
   ],
   "accounts": [
@@ -107,7 +113,7 @@ App Android native (Kotlin + Jetpack Compose) dựa trên spec trong `Claude.md`
 
 | Trường | Ý nghĩa |
 |---|---|
-| `owners` (gốc file) | Danh sách người sở hữu: `id` và `name` |
+| `owners` (gốc file) | Danh sách người sở hữu: `id`, `name`, và mục tiêu nếu có: `goalAmount` (VND), `goalDate` (`YYYY-MM-DD`, có thể `null`) |
 | `accounts[].owners` | Phần tiền của từng người trong sổ. Mảng rỗng nghĩa là *Chưa gán* |
 
 Quy tắc khi nhập file:
@@ -165,6 +171,7 @@ app/src/main/java/vn/sotietkiem/
 | Kéo thả file để nhập | Chọn file, dán JSON, hoặc chia sẻ |
 | Bấm thẻ sổ để sửa | Bấm thẻ sổ để mở trang chi tiết |
 | — | Người sở hữu, chia tiền nhiều người, thống kê theo người |
+| — | Mục tiêu tiền gốc cho từng người, có hạn tùy chọn |
 | — | Tính tiền về đến một ngày chọn |
 | — | Tên sổ tự động "Tiết kiệm N" |
 | — | Nhắc sao lưu khi có thay đổi chưa xuất file |

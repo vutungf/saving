@@ -64,6 +64,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun renameOwner(id: String, name: String) =
         commitOwners(_owners.value.map { if (it.id == id) it.copy(name = name.trim().take(40)) else it })
 
+    /** Sửa tên và mục tiêu; goalAmount null hoặc <= 0 là bỏ mục tiêu. */
+    fun updateOwner(id: String, name: String, goalAmount: Long?, goalDate: String?) {
+        val g = goalAmount?.takeIf { it > 0 }
+        commitOwners(_owners.value.map {
+            if (it.id == id) it.copy(name = name.trim().take(40), goalAmount = g, goalDate = if (g != null) goalDate else null) else it
+        })
+    }
+
     /** Số sổ đang có phần của người này. Chỉ xóa được người không còn sổ nào. */
     fun ownerUsage(id: String): Int = _accounts.value.count { a -> a.owners.any { it.ownerId == id } }
 

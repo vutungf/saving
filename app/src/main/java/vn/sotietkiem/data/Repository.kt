@@ -107,7 +107,9 @@ object Codec {
             val o = el as? JsonObject ?: return@mapNotNull null
             val id = o.str("id")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
             val name = o.str("name")?.trim()?.take(40)?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            Owner(id, name)
+            val goal = o.num("goalAmount")?.toLong()?.takeIf { it > 0 }
+            val goalDate = o.str("goalDate")?.let { runCatching { LocalDate.parse(it.take(10)).toString() }.getOrNull() }
+            Owner(id, name, goal, if (goal != null) goalDate else null)
         }.distinctBy { it.id }
         return ImportResult(out, skipped, owners)
     }
