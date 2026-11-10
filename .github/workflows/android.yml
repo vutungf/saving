@@ -27,11 +27,13 @@ jobs:
           DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
         run: |
           if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
-            mkdir -p ~/.android
-            echo "$DEBUG_KEYSTORE_BASE64" | base64 --decode > ~/.android/debug.keystore
-            echo "Đã dùng khóa debug từ secret. SHA-1:"
-            keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
-              -storepass android -keypass android | grep -E "SHA1:"
+            KS="$RUNNER_TEMP/debug.keystore"
+            # Bỏ khoảng trắng / xuống dòng lỡ dán vào secret rồi giải mã
+            printf '%s' "$DEBUG_KEYSTORE_BASE64" | tr -d ' \r\n' | base64 --decode > "$KS"
+            mkdir -p ~/.android && cp "$KS" ~/.android/debug.keystore
+            echo "DEBUG_KEYSTORE_PATH=$KS" >> "$GITHUB_ENV"
+            echo "Khóa debug từ secret:"
+            keytool -list -v -keystore "$KS" -alias androiddebugkey -storepass android -keypass android | grep -E "SHA1:"
           else
             echo "::warning::Chưa có secret DEBUG_KEYSTORE_BASE64, APK sẽ không đăng nhập Google được."
           fi
@@ -41,6 +43,20 @@ jobs:
 
       - name: Build APK
         run: ./gradlew --no-daemon assembleDebug assembleRelease
+
+      # In SHA-1 của chính các APK vừa build; phải trùng SHA-1 đã thêm trên Firebase thì đăng nhập Google mới chạy
+      - name: Check APK signature
+        env:
+          EXPECTED_SHA1: "f12714b9eb66a35b012f427431ce12a50a043091"
+        run: |
+          APKSIGNER="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner"
+          for apk in app/build/outputs/apk/*/*.apk; do
+            sha=$("$APKSIGNER" verify --print-certs "$apk" | grep -m1 "SHA-1 digest" | awk '{print $NF}')
+            echo "$apk -> SHA-1 $sha"
+            if [ "$sha" != "$EXPECTED_SHA1" ]; then
+              echo "::warning::$apk ký bằng SHA-1 $sha, khác SHA-1 trên Firebase ($EXPECTED_SHA1): đăng nhập Google sẽ lỗi."
+            fi
+          done
 
       - uses: actions/upload-artifact@v4
         with:

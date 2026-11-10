@@ -23,6 +23,19 @@ android {
         versionName = "1.0.0"
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // Trên GitHub Actions: dùng đúng file khóa debug khôi phục từ secret (biến DEBUG_KEYSTORE_PATH),
+            // để APK có cùng SHA-1 đã đăng ký trên Firebase. Trên máy dev: dùng ~/.android/debug.keystore như mặc định.
+            System.getenv("DEBUG_KEYSTORE_PATH")?.takeIf { file(it).exists() }?.let {
+                storeFile = file(it)
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
