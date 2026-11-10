@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Xem ghi chú trong backup_rules.xml -->
 <data-extraction-rules>
     <cloud-backup>
-        <include domain="file" path="." />
-        <include domain="sharedpref" path="." />
+        <include domain="sharedpref" path="stk_prefs.xml" />
     </cloud-backup>
     <device-transfer>
-        <include domain="file" path="." />
-        <include domain="sharedpref" path="." />
+        <include domain="sharedpref" path="stk_prefs.xml" />
     </device-transfer>
 </data-extraction-rules>

@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "943489072941",
+    "project_id": "save-6c0d0",
+    "storage_bucket": "save-6c0d0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:943489072941:android:fb7b6055e2323d3875dda4",
+        "android_client_info": {
+          "package_name": "vn.sotietkiem.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "943489072941-78geqhts92sqpmldj4f7snf49rmtpheh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "vn.sotietkiem.app",
+            "certificate_hash": "f12714b9eb66a35b012f427431ce12a50a043091"
+          }
+        },
+        {
+          "client_id": "943489072941-p9li5t9vsftfpnmg23gbf6ff23oer1u7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC62xo7audZCRFO5cFb2mlPAWH3zMexTe0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "943489072941-p9li5t9vsftfpnmg23gbf6ff23oer1u7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

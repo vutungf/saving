@@ -52,8 +52,10 @@ fun ownerAllocation(accounts: List<Account>, owners: List<vn.sotietkiem.data.Own
 fun ownerPrincipal(accounts: List<Account>, ownerId: String): Long =
     accounts.filter { !it.closed }.sumOf { a -> a.owners.firstOrNull { it.ownerId == ownerId }?.amount ?: 0L }
 
-/** Tiến độ mục tiêu (chỉ tính tiền gốc). */
+/** Tiến độ một mục tiêu (chỉ tính tiền gốc). [current] là phần tiền gốc được phân cho mục tiêu này. */
 data class GoalProgress(
+    val goalId: String,
+    val name: String,
     val goal: Long,
     val current: Long,
     val deadline: java.time.LocalDate?,
@@ -78,8 +80,22 @@ data class GoalProgress(
         }
 }
 
-fun goalOf(owner: vn.sotietkiem.data.Owner, accounts: List<Account>, today: java.time.LocalDate = java.time.LocalDate.now()): GoalProgress? {
-    val g = owner.goalAmount?.takeIf { it > 0 } ?: return null
-    val d = owner.goalDate?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
-    return GoalProgress(g, ownerPrincipal(accounts, owner.id), d, today)
+/**
+ * Tiến độ các mục tiêu của một người, theo thứ tự ưu tiên từ trên xuống: tiền gốc đang gửi được dồn
+ * cho mục tiêu đầu tiên tới khi đủ, phần còn lại mới chuyển sang mục tiêu tiếp theo.
+ */
+fun goalsOf(
+    owner: vn.sotietkiem.data.Owner,
+    accounts: List<Account>,
+    today: java.time.LocalDate = java.time.LocalDate.now(),
+): List<GoalProgress> {
+    var left = ownerPrincipal(accounts, owner.id)
+    return owner.goals.map { g ->
+        val take = minOf(left, g.amount).coerceAtLeast(0)
+        left -= take
+        GoalProgress(
+            g.id, g.name, g.amount, take,
+            g.date?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }, today,
+        )
+    }
 }

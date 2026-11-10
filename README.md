@@ -3,15 +3,18 @@
 App Android native (Kotlin + Jetpack Compose). App theo dõi các sổ tiết kiệm ở ngân hàng Việt Nam, tính tiền lãi, ngày đáo hạn và thống kê, kể cả thống kê riêng theo từng người sở hữu. Dữ liệu chỉ nằm trên máy và được sao lưu bằng file JSON. File JSON tương thích với bản web một file HTML, có thêm phần người sở hữu và mục tiêu.
 
 - **Tiền tệ:** chỉ dùng VND.
-- **Lưu trữ:** chỉ trên điện thoại, không gửi lên máy chủ nào.
-- **Sao lưu:** xuất và nhập lại bằng file JSON. Gỡ app hoặc xóa dữ liệu app thì các sổ sẽ mất, nên hãy xuất file định kỳ.
+- **Lưu trữ:** người dùng chọn một trong hai cách (ở màn chào lần đầu, đổi được trong Cài đặt):
+  - **Chỉ trên máy này:** dữ liệu mã hóa, không gửi lên máy chủ nào;
+  - **Đồng bộ với tài khoản Google:** đăng nhập Google, dữ liệu được mã hóa đầu-cuối rồi lưu trên Firebase Firestore, dùng chung trên nhiều điện thoại. Cần cài Firebase trước, xem [FIREBASE_SETUP.md](FIREBASE_SETUP.md).
+- **Mã hóa:** file trên máy, dữ liệu trên Firebase và (mặc định) file sao lưu xuất ra đều được mã hóa AES-256-GCM.
+- **Sao lưu:** xuất và nhập lại bằng file JSON (có thể đặt mật khẩu). Ở chế độ chỉ trên máy, gỡ app hoặc xóa dữ liệu app thì các sổ sẽ mất, nên hãy xuất file định kỳ.
 
 ## Tính năng
 
 ### Tab Tổng quan
 
 - **Phạm vi thống kê:** chọn *Tất cả*, *từng người sở hữu* hoặc *Chưa gán*. Khi chọn một người, mọi con số chỉ tính phần tiền của người đó trong từng sổ.
-- **Mục tiêu:** ở chế độ *Tất cả*, liệt kê tiến độ mục tiêu của từng người đã đặt mục tiêu (bấm vào một người để xem thống kê riêng người đó). Khi đang xem một người, chỉ hiện mục tiêu của người đó.
+- **Mục tiêu:** ở chế độ *Tất cả*, liệt kê các mục tiêu của từng người theo thứ tự ưu tiên (bấm tên người để xem thống kê riêng, bấm *Quản lý* để mở trang mục tiêu). Khi đang xem một người, chỉ hiện mục tiêu của người đó.
 - **Khối chính:** tổng tiền gốc đang gửi (kèm số tiền bằng chữ và số sổ), lãi tích lũy tăng theo từng giây, lãi sinh thêm mỗi ngày.
 - **Dải số liệu:** lãi dự kiến cả kỳ, tổng nhận khi đáo hạn, lãi suất bình quân có trọng số theo số tiền, số sổ đang gửi.
 - **Đến hạn trong 30 ngày tới:** các sổ sắp hoặc đã đáo hạn. Bấm một dòng để mở trang chi tiết. Sổ đã đáo hạn có sẵn nút *Tái tục* và *Tất toán*.
@@ -60,16 +63,38 @@ App Android native (Kotlin + Jetpack Compose). App theo dõi các sổ tiết ki
 - **Xem trước:** ngày đáo hạn, số ngày gửi, lãi dự kiến và tổng nhận, cập nhật trong lúc nhập.
 - **Tái tục:** ngày gửi bằng ngày đáo hạn của sổ cũ. Sổ cũ lĩnh lãi cuối kỳ thì số tiền mới bằng gốc cộng lãi. Phần của từng người được chia lại theo tỷ lệ cũ. Sau khi lưu, sổ cũ tự chuyển sang Đã tất toán.
 
+### Màn chào (lần mở đầu tiên)
+
+Hai lựa chọn: *Lưu trên máy này* hoặc *Đăng nhập Google để đồng bộ*. Người đã có dữ liệu từ bản trước không thấy màn này (tự chọn lưu trên máy).
+
 ### Tab Cài đặt
 
-- **Người sở hữu:** thêm, sửa, xóa. Mỗi người có một màu riêng. Chỉ xóa được người không còn phần trong sổ nào.
-- **Mục tiêu cho từng người** (bấm biểu tượng bút chì):
-  - nhập số tiền mục tiêu và hạn (hạn không bắt buộc);
-  - tiến độ **chỉ tính tiền gốc** đang gửi của người đó (phần của họ trong các sổ chưa tất toán);
-  - app hiện thanh tiến độ, %, số còn thiếu, số ngày còn lại và số tiền cần gửi thêm mỗi tháng để kịp hạn;
-  - quá hạn mà chưa đạt thì dòng chữ chuyển màu đỏ; đạt rồi thì hiện "Đã đạt mục tiêu".
-- **Xuất file JSON:** lưu file `so-tiet-kiem-YYYY-MM-DD.json`, chia sẻ qua app khác, hoặc xem nội dung để sao chép. Có dòng chữ đỏ khi có thay đổi chưa lưu ra file.
-- **Nhập file JSON:** chọn file hoặc dán nội dung. Các mục sai bị bỏ qua. Sau đó chọn *Gộp vào hiện tại* (bỏ qua sổ trùng ID) hoặc *Thay thế toàn bộ* (có hỏi xác nhận).
+- **Lưu trữ và đồng bộ:**
+  - chọn *Chỉ trên máy này* hoặc *Đồng bộ với tài khoản Google*;
+  - đăng nhập Google lần đầu thì tạo **mật khẩu đồng bộ** (ít nhất 8 ký tự); máy khác đăng nhập cùng tài khoản phải nhập đúng mật khẩu này;
+  - hiện email, thời điểm đồng bộ gần nhất; nút *Đồng bộ ngay*, *Đổi mật khẩu đồng bộ*, *Đăng xuất* (dữ liệu giữ nguyên), *Xóa dữ liệu trên mây*;
+  - tự đồng bộ: khi mở app, 2 giây sau mỗi thay đổi, và ngay khi máy khác cập nhật;
+  - gộp theo từng sổ / người sở hữu: bản sửa sau cùng thắng; xóa ở một máy thì các máy khác cũng xóa (trừ khi sổ được sửa lại sau đó);
+  - mất mạng thì vẫn dùng bình thường, lần sau có mạng sẽ đồng bộ;
+  - đang đồng bộ thì lần đồng bộ thành công cũng tính là đã sao lưu (tắt dòng nhắc xuất file).
+
+- **Người sở hữu:** thêm, đổi tên (bút chì), xóa. Mỗi người có một màu riêng. Chỉ xóa được người không còn phần trong sổ nào.
+- **Mục tiêu** (biểu tượng lá cờ cạnh mỗi người): mở trang mục tiêu của người đó.
+  - Một người có **nhiều mục tiêu**, mỗi mục tiêu gồm tên, số tiền và hạn (hạn không bắt buộc).
+  - Thứ tự từ trên xuống là **mức ưu tiên**; đổi thứ tự bằng mũi tên lên/xuống.
+  - Tiến độ **chỉ tính tiền gốc** đang gửi của người đó (phần của họ trong các sổ chưa tất toán). Tiền gốc được dồn cho mục tiêu trên cùng trước, đủ rồi mới sang mục tiêu tiếp theo. Ví dụ có 150 triệu, mục tiêu 1 là 100 triệu và mục tiêu 2 là 1 tỷ thì mục tiêu 1 đạt 100%, mục tiêu 2 được 50 triệu (5%).
+  - Mỗi mục tiêu hiện thanh tiến độ, %, số còn thiếu, số ngày còn lại và số tiền cần gửi thêm mỗi tháng để kịp hạn. Quá hạn mà chưa đạt thì chữ màu đỏ; đạt rồi thì hiện "Đã đạt mục tiêu".
+- **Khóa ứng dụng:**
+  - bật khóa và chọn kiểu: **mã PIN** (4–6 chữ số) hoặc **hình vẽ** (nối ít nhất 4 điểm trên lưới 3×3, giống khóa màn hình Android); mã mới phải nhập hoặc vẽ 2 lần;
+  - *Đổi kiểu hoặc mã khóa* và tắt khóa đều phải xác nhận mã hiện tại trước;
+  - *Mở khóa bằng vân tay / khuôn mặt* nếu máy hỗ trợ;
+  - *Tự khóa khi rời app*: ngay lập tức, sau 1 phút hoặc sau 5 phút. App bị tắt hẳn thì lần mở sau luôn hỏi mã;
+  - nhập sai 5 lần liên tiếp phải chờ 30 giây;
+  - mở trình chọn file hoặc chia sẻ để sao lưu thì quay lại không bị khóa;
+  - *Quên mã PIN? / Quên hình mở khóa?* trên màn khóa: chỉ có cách xóa toàn bộ dữ liệu (xác nhận 2 lần) rồi nhập lại từ file JSON;
+  - mã PIN và hình vẽ không lưu dạng rõ, chỉ lưu mã băm SHA-256 kèm muối ngẫu nhiên.
+- **Xuất file sao lưu:** lưu file `so-tiet-kiem-YYYY-MM-DD.json`, chia sẻ qua app khác, hoặc xem nội dung để sao chép. Trước khi xuất, app hỏi **mật khẩu mã hóa** (mặc định bật, ít nhất 6 ký tự, nhập 2 lần); có thể tắt để xuất file thường. Có dòng chữ đỏ khi có thay đổi chưa sao lưu.
+- **Nhập file sao lưu:** chọn file hoặc dán nội dung. File mã hóa thì hỏi mật khẩu. Các mục sai bị bỏ qua. Sau đó chọn *Gộp vào hiện tại* (bỏ qua sổ trùng ID) hoặc *Thay thế toàn bộ* (có hỏi xác nhận).
 - **Nhắc đáo hạn:** thông báo trước 3 ngày và vào đúng ngày đáo hạn.
 - **Dữ liệu:** tạo 5 sổ mẫu để xem thử; xóa toàn bộ dữ liệu (phải xác nhận hai lần).
 - Biểu tượng tab Cài đặt có **chấm đỏ** khi có thay đổi chưa xuất file.
@@ -96,6 +121,34 @@ App Android native (Kotlin + Jetpack Compose). App theo dõi các sổ tiết ki
 
 TNEX, Liobank, Digimi và ngân hàng tự nhập tên không có logo, nên app hiện huy hiệu chữ cái có màu thay thế.
 
+## Mã hóa
+
+| Dữ liệu | Cách mã hóa | Khóa |
+|---|---|---|
+| File trên máy (`stk_v1.json`, `stk_owners.json`, `stk_deleted.json`) | AES-256-GCM | Sinh trong Android Keystore, không rời khỏi máy. File cũ chưa mã hóa được đọc và mã hóa lại ở lần lưu sau |
+| Dữ liệu trên Firebase | AES-256-GCM, mã hóa trên điện thoại trước khi gửi | Suy từ mật khẩu đồng bộ (PBKDF2-HMAC-SHA256, 120.000 vòng, muối ngẫu nhiên). Khóa đã suy được lưu trên máy, bọc bằng khóa Keystore |
+| File sao lưu xuất ra | AES-256-GCM | Suy từ mật khẩu nhập khi xuất (PBKDF2 như trên) |
+| Mã khóa ứng dụng (PIN / hình vẽ) | Băm SHA-256 kèm muối | Không lưu dạng rõ |
+
+Vì khóa trên máy nằm trong Keystore của riêng điện thoại đó, các file dữ liệu **không** đi theo Android Auto Backup sang máy mới. Chuyển máy bằng file sao lưu hoặc đồng bộ Google.
+
+File sao lưu mã hóa có dạng:
+
+```json
+{
+  "app": "so-tiet-kiem",
+  "encrypted": true,
+  "version": 1,
+  "cipher": "AES-256-GCM",
+  "kdf": "PBKDF2WithHmacSHA256",
+  "iter": 120000,
+  "salt": "base64...",
+  "data": "base64(iv 12 byte + dữ liệu mã hóa + thẻ xác thực)"
+}
+```
+
+Giải mã `data` ra đúng nội dung file JSON không mã hóa mô tả ở mục dưới. Bản web một file HTML chỉ đọc được file không mã hóa.
+
 ## Định dạng file JSON
 
 ```json
@@ -105,8 +158,15 @@ TNEX, Liobank, Digimi và ngân hàng tự nhập tên không có logo, nên app
   "currency": "VND",
   "exportedAt": "2026-11-09T10:00:00.000Z",
   "owners": [
-    { "id": "a1b2...", "name": "Cha", "goalAmount": 1000000000, "goalDate": "2027-12-31" },
-    { "id": "c3d4...", "name": "Mẹ", "goalAmount": null, "goalDate": null }
+    {
+      "id": "a1b2...",
+      "name": "Cha",
+      "goals": [
+        { "id": "g1...", "name": "Quỹ khẩn cấp", "amount": 100000000, "date": null },
+        { "id": "g2...", "name": "Mua nhà", "amount": 1000000000, "date": "2027-12-31" }
+      ]
+    },
+    { "id": "c3d4...", "name": "Mẹ", "goals": [] }
   ],
   "accounts": [
     {
@@ -140,8 +200,8 @@ TNEX, Liobank, Digimi và ngân hàng tự nhập tên không có logo, nên app
 |---|---|---|
 | `id` | chuỗi | Mã người sở hữu |
 | `name` | chuỗi | Tên hiển thị, tối đa 40 ký tự |
-| `goalAmount` | số nguyên hoặc `null` | Mục tiêu tiền gốc (VND) |
-| `goalDate` | `YYYY-MM-DD` hoặc `null` | Hạn đạt mục tiêu, không bắt buộc |
+| `goals` | mảng | Các mục tiêu theo thứ tự ưu tiên: `id`, `name`, `amount` (VND), `date` (`YYYY-MM-DD` hoặc `null`) |
+| `goalAmount`, `goalDate` | cũ | Định dạng một mục tiêu của bản trước; khi nhập file app tự chuyển thành một mục trong `goals` |
 
 **Sổ tiết kiệm** (`accounts`):
 
@@ -181,6 +241,8 @@ Quy tắc khi nhập file:
 ./gradlew assembleRelease      # app/build/outputs/apk/release/app-release.apk (ký bằng khóa debug)
 ```
 
+**Đồng bộ Google:** cần thêm `app/google-services.json`, xem [FIREBASE_SETUP.md](FIREBASE_SETUP.md). Thiếu file này app vẫn build được, chỉ ẩn tùy chọn đồng bộ.
+
 **GitHub Actions:** mỗi lần push, workflow `.github/workflows/android.yml` build APK. Tải ở tab Actions → lần chạy mới nhất → Artifacts → `so-tiet-kiem-apk`.
 
 Bản release đang ký bằng khóa debug để cài thử được ngay. Trước khi đưa lên Google Play, hãy tạo keystore riêng và sửa `signingConfig` trong `app/build.gradle.kts`.
@@ -193,17 +255,29 @@ app/src/main/java/vn/sotietkiem/
                                   đồng hồ 1 giây cho lãi tích lũy; xuất JSON từ dòng nhắc
   data/Account.kt                 model sổ, người sở hữu (Owner, OwnerShare), file sao lưu
   data/Banks.kt                   58 ngân hàng, logo ở assets/banks/<mã>.webp
-  data/Repository.kt              lưu stk_v1.json và stk_owners.json; nhập/xuất và kiểm tra JSON
+  data/Repository.kt              lưu file trên máy (mã hóa); nhập/xuất, kiểm tra và mã hóa file sao lưu
+  domain/Merge.kt                 gộp dữ liệu máy và mây theo updatedAt, có danh sách đã xóa
+  sync/CloudSync.kt               đăng nhập Google, mật khẩu đồng bộ, đồng bộ Firestore mã hóa đầu-cuối
+  util/Crypto.kt                  AES-256-GCM, khóa Keystore, PBKDF2
   domain/Calc.kt                  ngày đáo hạn, lãi đơn, trạng thái, tổng quan, biểu đồ, tính đến ngày
   domain/Owners.kt                phạm vi theo người, chia lại phần khi tái tục, chia đều, phân bổ
   util/Format.kt                  định dạng VND, đọc số bằng chữ, tìm kiếm không dấu
+  util/AppLock.kt                 cài đặt khóa: kiểu PIN/hình vẽ, mã băm, vân tay, thời gian tự khóa
+  util/Biometric.kt               kiểm tra và hiện hộp thoại vân tay / khuôn mặt
   notify/MaturityWorker.kt        nhắc đáo hạn (WorkManager, chạy trên máy)
   ui/AppViewModel.kt              trạng thái app, ghi nhận thay đổi để nhắc sao lưu
   ui/screens/OverviewScreen.kt    Tổng quan
   ui/screens/AccountsScreen.kt    Sổ của tôi
   ui/screens/DetailScreen.kt      Trang chi tiết sổ
   ui/screens/FormScreen.kt        Thêm, sửa, tái tục; chọn ngân hàng; chia phần người sở hữu
-  ui/screens/BackupScreen.kt      Cài đặt: người sở hữu, sao lưu, nhắc đáo hạn, dữ liệu
+  ui/screens/BackupScreen.kt      Cài đặt: người sở hữu, khóa ứng dụng, sao lưu, nhắc đáo hạn, dữ liệu
+  ui/screens/GoalsScreen.kt       Mục tiêu của một người: thêm, sửa, xóa, đổi thứ tự
+  ui/screens/WelcomeScreen.kt     Màn chào: chọn lưu trên máy hoặc đăng nhập Google
+  ui/components/CloudSettings.kt  Thẻ Lưu trữ và đồng bộ, hộp thoại mật khẩu đồng bộ
+  ui/components/Exporter.kt       Xuất file sao lưu có mật khẩu, nhập file mã hóa
+  ui/screens/LockScreen.kt        Màn khóa: bàn phím PIN hoặc lưới hình vẽ, vân tay, quên mã
+  ui/components/PatternPad.kt     Lưới 3×3 để vẽ hình mở khóa
+  ui/components/LockSettings.kt   Thẻ Khóa ứng dụng và các bước đặt / đổi / tắt khóa
   ui/components/                  thẻ sổ, logo, biểu đồ, tính tiền về đến ngày, người sở hữu, hộp thoại
 ```
 
@@ -211,13 +285,15 @@ app/src/main/java/vn/sotietkiem/
 
 | Bản web | Bản Android |
 |---|---|
-| `localStorage` khóa `stk:v1` | File `stk_v1.json` (sổ) và `stk_owners.json` (người sở hữu) trong bộ nhớ riêng của app, được Android Auto Backup sao lưu theo tài khoản Google |
+| `localStorage` khóa `stk:v1` | File mã hóa trong bộ nhớ riêng của app, hoặc đồng bộ tài khoản Google qua Firebase (mã hóa đầu-cuối) |
+| File JSON không mã hóa | File sao lưu mặc định mã hóa bằng mật khẩu |
 | Logo base64 nhúng trong HTML | Logo WebP trong `assets/banks` (dữ liệu VietQR, qua gói npm `vietqr-zero`, MIT) |
 | Font tải từ Google Fonts | Be Vietnam Pro nhúng sẵn trong `res/font` (SIL OFL), chạy offline hoàn toàn |
 | Kéo thả file để nhập | Chọn file, dán JSON, hoặc chia sẻ |
 | Bấm thẻ sổ để sửa | Bấm thẻ sổ để mở trang chi tiết |
 | — | Người sở hữu, chia tiền nhiều người, thống kê theo người |
-| — | Mục tiêu tiền gốc cho từng người, có hạn tùy chọn |
+| — | Nhiều mục tiêu tiền gốc cho từng người, sắp xếp theo ưu tiên |
+| — | Khóa ứng dụng bằng mã PIN, hình vẽ, vân tay hoặc khuôn mặt |
 | — | Tính tiền về đến một ngày chọn |
 | — | Tên sổ tự động "Tiết kiệm N" |
 | — | Nhắc sao lưu khi có thay đổi chưa xuất file |

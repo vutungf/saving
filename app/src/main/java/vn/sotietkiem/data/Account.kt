@@ -37,10 +37,30 @@ data class Account(
 data class Owner(
     val id: String,
     val name: String,
-    /** Mục tiêu tiền gốc đang gửi (VND). Null = chưa đặt mục tiêu. */
+    /** Cũ: một mục tiêu duy nhất. Chỉ còn để đọc dữ liệu cũ; khi tải sẽ chuyển sang [goals]. */
     val goalAmount: Long? = null,
-    /** Hạn đạt mục tiêu, YYYY-MM-DD. Không bắt buộc. */
     val goalDate: String? = null,
+    /** Các mục tiêu, theo thứ tự ưu tiên từ trên xuống. */
+    val goals: List<Goal> = emptyList(),
+    /** Lần sửa gần nhất (ISO), dùng khi đồng bộ giữa nhiều máy. */
+    val updatedAt: String? = null,
+) {
+    /** Chuyển mục tiêu kiểu cũ (goalAmount/goalDate) sang danh sách [goals]. */
+    fun normalized(): Owner {
+        val legacy = goalAmount?.takeIf { it > 0 }
+        val list = if (legacy != null && goals.isEmpty()) listOf(Goal("legacy-$id", "Mục tiêu", legacy, goalDate)) else goals
+        return copy(goalAmount = null, goalDate = null, goals = list)
+    }
+}
+
+/** Một mục tiêu tiền gốc của người sở hữu, ví dụ "Quỹ khẩn cấp 100 triệu". */
+@Serializable
+data class Goal(
+    val id: String,
+    val name: String,
+    val amount: Long,
+    /** Hạn đạt mục tiêu, YYYY-MM-DD. Không bắt buộc. */
+    val date: String? = null,
 )
 
 @Serializable

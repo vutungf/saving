@@ -1,7 +1,14 @@
 package vn.sotietkiem
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
+import vn.sotietkiem.util.AppLock
+import vn.sotietkiem.util.canUseBiometric
+import vn.sotietkiem.util.showBiometricPrompt
+import vn.sotietkiem.ui.screens.LockScreen
+import vn.sotietkiem.ui.screens.WelcomeScreen
+import vn.sotietkiem.ui.components.CloudDialogs
+import androidx.lifecycle.lifecycleScope
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -41,7 +48,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import vn.sotietkiem.data.Account
 import vn.sotietkiem.notify.MaturityWorker
-import vn.sotietkiem.data.Codec
+import vn.sotietkiem.ui.components.ExportTarget
+import vn.sotietkiem.ui.components.rememberExporter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Badge
@@ -54,18 +62,75 @@ import vn.sotietkiem.ui.components.ConfirmDialog
 import vn.sotietkiem.ui.screens.AccountsScreen
 import vn.sotietkiem.ui.screens.BackupScreen
 import vn.sotietkiem.ui.screens.DetailScreen
+import vn.sotietkiem.ui.screens.GoalActions
+import vn.sotietkiem.ui.screens.GoalsScreen
+import vn.sotietkiem.data.Goal
 import vn.sotietkiem.ui.screens.FormScreen
 import vn.sotietkiem.ui.screens.OverviewScreen
 import vn.sotietkiem.ui.theme.SoTietKiemTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private val vm: AppViewModel by viewModels()
+    private lateinit var lock: AppLock
+    /** Đang hiện màn khóa. Màn khóa phủ lên trên nên trạng thái app bên dưới (tab, bộ lọc) vẫn giữ. */
+    private var locked by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         MaturityWorker.schedule(applicationContext)
-        setContent { SoTietKiemTheme { App(vm) } }
+        lock = AppLock(this)
+        locked = lock.enabled && !AppLock.unlocked
+        setContent {
+            SoTietKiemTheme {
+                Box(Modifier.fillMaxSize()) {
+                    val chosen by vm.storageChosen.collectAsStateWithLifecycle()
+                    // Lần đầu mở app: chọn lưu trên máy hay đăng nhập Google
+                    if (chosen) App(vm) else WelcomeScreen(vm)
+                    CloudDialogs(vm)
+                    if (locked) {
+                        BackHandler { moveTaskToBack(true) }
+                        LockScreen(
+                            pattern = lock.type == AppLock.TYPE_PATTERN,
+                            onSecret = { p -> lock.check(p).also { ok -> if (ok) unlock() } },
+                            blockedUntil = { lock.blockedUntil },
+                            biometricAvailable = lock.biometric && canUseBiometric(this@MainActivity),
+                            onBiometric = { showBiometricPrompt(this@MainActivity) { unlock() } },
+                            // Quên mã khóa: chỉ xóa dữ liệu trên máy và đăng xuất Google (để không tải lại được từ mây),
+                            // dữ liệu trên mây vẫn còn, đăng nhập lại cần mật khẩu đồng bộ
+                            onForgot = {
+                                vm.clearLocal()
+                                lifecycleScope.launch { vm.cloud.signOut() }
+                                lock.disable()
+                                unlock()
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun unlock() {
+        AppLock.unlocked = true
+        locked = false
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (!lock.enabled) { locked = false; return }
+        val away = System.currentTimeMillis() - AppLock.leftAt
+        when {
+            // Vừa mở trình chọn file / chia sẻ của chính app thì không khóa lại
+            AppLock.skipNext -> AppLock.skipNext = false
+            AppLock.unlocked && AppLock.leftAt > 0 && away >= lock.delaySeconds * 1000L -> AppLock.unlocked = false
+        }
+        locked = !AppLock.unlocked
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) AppLock.leftAt = System.currentTimeMillis()
     }
 }
 
@@ -82,7 +147,10 @@ private fun App(vm: AppViewModel) {
     val owners by vm.owners.collectAsStateWithLifecycle()
     val lastChange by vm.lastChange.collectAsStateWithLifecycle()
     // Có thay đổi sau lần xuất file gần nhất
-    val unsaved = accounts.isNotEmpty() && lastChange > lastExport
+    val lastSync by vm.lastSync.collectAsStateWithLifecycle()
+    val cloudState by vm.cloud.state.collectAsStateWithLifecycle()
+    // Đang đồng bộ Google thì lần đồng bộ thành công cũng tính là đã sao lưu
+    val unsaved = accounts.isNotEmpty() && lastChange > maxOf(lastExport, if (cloudState.ready) lastSync else 0L)
     var scopeRaw by rememberSaveable { mutableStateOf(OwnerScope.ALL) }
     // Người đang chọn đã bị xóa thì quay về Tất cả
     val ownerScope = if (scopeRaw == OwnerScope.ALL || scopeRaw == OwnerScope.UNASSIGNED || owners.any { it.id == scopeRaw }) scopeRaw else OwnerScope.ALL
@@ -93,21 +161,15 @@ private fun App(vm: AppViewModel) {
     var formRenew by rememberSaveable { mutableStateOf<String?>(null) }
     var formOpen by rememberSaveable { mutableStateOf(false) }
     var detailId by rememberSaveable { mutableStateOf<String?>(null) }
+    var goalsOwnerId by rememberSaveable { mutableStateOf<String?>(null) }
     var askClose by remember { mutableStateOf<Account?>(null) }
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
 
-    // Xuất file JSON trực tiếp từ thông báo nhắc, không cần vào tab Cài đặt
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        val ok = runCatching {
-            ctx.contentResolver.openOutputStream(uri)?.use { it.write(Codec.export(vm.accounts.value, vm.owners.value).toByteArray()) } != null
-        }.getOrDefault(false)
-        if (ok) vm.markExported()
-        scope.launch { snack.showSnackbar(if (ok) "Đã xuất file sao lưu" else "Không ghi được file, hãy thử lại ở tab Cài đặt") }
-    }
-    fun exportNow() = exportLauncher.launch(Codec.fileName())
+    // Xuất file sao lưu trực tiếp từ dòng nhắc, không cần vào tab Cài đặt (có hỏi mật khẩu mã hóa)
+    val exporter = rememberExporter(vm) { msg -> scope.launch { snack.showSnackbar(msg) } }
+    fun exportNow() = exporter.start(ExportTarget.FILE)
 
     /** Báo ngắn thao tác vừa làm. Việc nhắc xuất file do dòng nhắc ở Tổng quan và chấm đỏ tab Cài đặt đảm nhận. */
     fun changed(msg: String) {
@@ -138,6 +200,15 @@ private fun App(vm: AppViewModel) {
                 vm.reopen(a.id)
                 changed("Đã mở lại \"${a.name}\"")
             }
+        }
+    }
+
+    val goalActions = remember(vm) {
+        object : GoalActions {
+            override fun add(ownerId: String, name: String, amount: Long, date: String?) = vm.addGoal(ownerId, name, amount, date)
+            override fun update(ownerId: String, goal: Goal) = vm.updateGoal(ownerId, goal)
+            override fun delete(ownerId: String, goalId: String) = vm.deleteGoal(ownerId, goalId)
+            override fun move(ownerId: String, goalId: String, delta: Int) = vm.moveGoal(ownerId, goalId, delta)
         }
     }
 
@@ -174,6 +245,14 @@ private fun App(vm: AppViewModel) {
                 onBack = { closeForm() },
             )
         }
+        return
+    }
+
+    // Trang mục tiêu của một người (mở từ Tổng quan hoặc Cài đặt)
+    val goalsOwner = goalsOwnerId?.let { id -> owners.firstOrNull { it.id == id } }
+    if (goalsOwner != null) {
+        BackHandler { goalsOwnerId = null }
+        GoalsScreen(goalsOwner, owners, accounts, goalActions, onBack = { goalsOwnerId = null })
         return
     }
 
@@ -236,9 +315,10 @@ private fun App(vm: AppViewModel) {
                     onBackup = { tab = Tab.BACKUP },
                     unsaved = unsaved,
                     onExport = { exportNow() },
+                    onOpenGoals = { goalsOwnerId = it },
                 )
                 Tab.ACCOUNTS -> AccountsScreen(accounts, owners, now, pad, actions)
-                Tab.BACKUP -> BackupScreen(vm, accounts.size, lastExport, pad)
+                Tab.BACKUP -> BackupScreen(vm, accounts.size, lastExport, pad, onOpenGoals = { goalsOwnerId = it })
             }
             }
         }

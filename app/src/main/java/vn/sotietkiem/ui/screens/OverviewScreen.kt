@@ -52,7 +52,7 @@ import vn.sotietkiem.ui.components.ownerColor
 import vn.sotietkiem.data.Owner
 import vn.sotietkiem.domain.OwnerScope
 import vn.sotietkiem.domain.ownerAllocation
-import vn.sotietkiem.domain.goalOf
+import vn.sotietkiem.domain.goalsOf
 import vn.sotietkiem.ui.components.GoalBar
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -80,6 +80,7 @@ fun OverviewScreen(
     onBackup: () -> Unit,
     unsaved: Boolean = false,
     onExport: () -> Unit = onBackup,
+    onOpenGoals: (String) -> Unit = {},
 ) {
     // Thống kê theo người sở hữu: mỗi sổ chỉ tính phần tiền của người được chọn
     val accounts = OwnerScope.apply(allAccounts, scope)
@@ -113,26 +114,25 @@ fun OverviewScreen(
 
         item { Hero(sum.principal, sum.openAccounts.size, sum.openAccounts.sumOf { Calc.accrued(it, nowMillis) }, sum.dailyInterest) }
 
-        // Mục tiêu tiền gốc: một người khi đang lọc theo người đó, hoặc tất cả người có mục tiêu
-        val goalOwners = owners.filter { (scope == OwnerScope.ALL || scope == it.id) && it.goalAmount != null }
+        // Mục tiêu tiền gốc: một người khi đang lọc theo người đó, hoặc tất cả người có mục tiêu.
+        // Mỗi người có thể có nhiều mục tiêu, hiện theo thứ tự ưu tiên.
+        val goalOwners = owners.filter { (scope == OwnerScope.ALL || scope == it.id) && it.goals.isNotEmpty() }
         if (goalOwners.isNotEmpty()) item {
             SectionCard(if (scope == OwnerScope.ALL) "Mục tiêu" else "Mục tiêu của ${goalOwners[0].name}") {
                 goalOwners.forEachIndexed { i, o ->
-                    val g = goalOf(o, allAccounts) ?: return@forEachIndexed
                     if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Column(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                            .clickable(enabled = scope == OwnerScope.ALL) { onScope(o.id) }.padding(vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        if (scope == OwnerScope.ALL) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OwnerAvatar(o.name, ownerColor(owners, o.id), 24.dp)
-                                Text(o.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                                .clickable(enabled = scope == OwnerScope.ALL) { onScope(o.id) }.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OwnerAvatar(o.name, ownerColor(owners, o.id), 24.dp)
+                            Text(o.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         }
-                        GoalBar(g, ownerColor(owners, o.id))
+                        TextButton(onClick = { onOpenGoals(o.id) }) { Text("Quản lý") }
                     }
+                    goalsOf(o, allAccounts).forEach { g -> GoalBar(g, ownerColor(owners, o.id)) }
                 }
             }
         }

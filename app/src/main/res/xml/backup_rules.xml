@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Các file dữ liệu được mã hóa bằng khóa Keystore của riêng máy này nên không sao lưu được sang máy khác.
+     Dùng file JSON xuất ra hoặc đồng bộ tài khoản Google để chuyển máy. -->
 <full-backup-content>
-    <include domain="file" path="." />
-    <include domain="sharedpref" path="." />
+    <include domain="sharedpref" path="stk_prefs.xml" />
 </full-backup-content>

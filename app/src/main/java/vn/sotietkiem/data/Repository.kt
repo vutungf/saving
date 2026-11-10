@@ -9,46 +9,77 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import vn.sotietkiem.domain.Calc
+import vn.sotietkiem.util.Crypto
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
 /**
- * Lưu toàn bộ sổ vào một file JSON trong bộ nhớ riêng của app (tương đương khóa localStorage "stk:v1"
- * ở bản web). Dữ liệu không rời khỏi máy, trừ khi người dùng tự xuất file.
+ * Lưu sổ, người sở hữu và danh sách đã xóa vào các file trong bộ nhớ riêng của app.
+ * Các file được mã hóa AES-256-GCM bằng khóa trong Android Keystore. File cũ chưa mã hóa
+ * vẫn đọc được và được mã hóa lại ở lần lưu tiếp theo.
  */
 class Repository(context: Context) {
     private val file = File(context.filesDir, "stk_v1.json")
     private val ownersFile = File(context.filesDir, "stk_owners.json")
+    private val deletedFile = File(context.filesDir, "stk_deleted.json")
     private val prefs = context.getSharedPreferences("stk_prefs", Context.MODE_PRIVATE)
 
-    fun load(): List<Account> = runCatching {
-        if (!file.exists()) emptyList() else Codec.json.decodeFromString<List<Account>>(file.readText())
-    }.getOrDefault(emptyList())
-
-    @Synchronized
-    fun save(list: List<Account>) {
-        val tmp = File(file.parentFile, file.name + ".tmp")
-        tmp.writeText(Codec.json.encodeToString(list))
-        if (!tmp.renameTo(file)) {
-            file.writeText(tmp.readText()); tmp.delete()
+    /** Đọc file (tự giải mã nếu đã mã hóa). File không giải mã được thì đổi tên để giữ lại và trả về null. */
+    private fun readText(f: File): String? {
+        if (!f.exists()) return null
+        val bytes = f.readBytes()
+        if (!Crypto.isLocalEncrypted(bytes)) return bytes.decodeToString()
+        return try {
+            Crypto.decryptLocal(bytes).decodeToString()
+        } catch (e: Exception) {
+            // Khóa Keystore không còn (ví dụ dữ liệu được khôi phục sang máy khác)
+            f.renameTo(File(f.parentFile, f.name + ".unreadable-" + System.currentTimeMillis()))
+            null
         }
     }
+
+    @Synchronized
+    private fun writeText(f: File, text: String) {
+        val tmp = File(f.parentFile, f.name + ".tmp")
+        tmp.writeBytes(Crypto.encryptLocal(text.toByteArray()))
+        if (!tmp.renameTo(f)) {
+            f.writeBytes(tmp.readBytes()); tmp.delete()
+        }
+    }
+
+    fun load(): List<Account> = runCatching {
+        readText(file)?.let { Codec.json.decodeFromString<List<Account>>(it) } ?: emptyList()
+    }.getOrDefault(emptyList())
+
+    fun save(list: List<Account>) = writeText(file, Codec.json.encodeToString(list))
 
     fun loadOwners(): List<Owner> = runCatching {
-        if (!ownersFile.exists()) emptyList() else Codec.json.decodeFromString<List<Owner>>(ownersFile.readText())
+        readText(ownersFile)?.let { Codec.json.decodeFromString<List<Owner>>(it).map { o -> o.normalized() } } ?: emptyList()
     }.getOrDefault(emptyList())
 
-    @Synchronized
-    fun saveOwners(list: List<Owner>) {
-        val tmp = File(ownersFile.parentFile, ownersFile.name + ".tmp")
-        tmp.writeText(Codec.json.encodeToString(list))
-        if (!tmp.renameTo(ownersFile)) {
-            ownersFile.writeText(tmp.readText()); tmp.delete()
-        }
-    }
+    fun saveOwners(list: List<Owner>) = writeText(ownersFile, Codec.json.encodeToString(list))
+
+    /** Mã sổ / người sở hữu đã xóa → thời điểm xóa (ISO). Dùng khi đồng bộ để máy khác cũng xóa theo. */
+    fun loadDeleted(): Map<String, String> = runCatching {
+        readText(deletedFile)?.let { Codec.json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
+    }.getOrDefault(emptyMap())
+
+    fun saveDeleted(map: Map<String, String>) = writeText(deletedFile, Codec.json.encodeToString(map))
+
+    /** Lần đầu mở app: người dùng đã chọn cách lưu (trên máy / tài khoản Google) chưa. */
+    var storageChosen: Boolean
+        get() = prefs.getBoolean("storageChosen", false)
+        set(v) = prefs.edit().putBoolean("storageChosen", v).apply()
+
+    /** Thời điểm đồng bộ thành công gần nhất với Firebase (0 = chưa). */
+    var lastSyncAt: Long
+        get() = prefs.getLong("lastSyncAt", 0L)
+        set(v) = prefs.edit().putLong("lastSyncAt", v).apply()
 
     var lastExportAt: Long
         get() = prefs.getLong("lastExportAt", 0L)
@@ -84,6 +115,45 @@ object Codec {
     fun fileName(today: LocalDate = LocalDate.now()) = "so-tiet-kiem-$today.json"
 
     /**
+     * Bọc nội dung JSON trong một "phong bì" mã hóa bằng mật khẩu:
+     * {"app":"so-tiet-kiem","encrypted":true,"kdf":"PBKDF2WithHmacSHA256","iter":..,"salt":..,"data":..}
+     * data = base64(iv + ciphertext AES-256-GCM).
+     */
+    fun encryptExport(plainJson: String, password: String): String {
+        val salt = Crypto.randomBytes(16)
+        val key = Crypto.deriveKey(password, salt)
+        val data = Crypto.encrypt(key, plainJson.toByteArray())
+        val o = buildJsonObject {
+            put("app", "so-tiet-kiem")
+            put("encrypted", true)
+            put("version", 1)
+            put("cipher", "AES-256-GCM")
+            put("kdf", "PBKDF2WithHmacSHA256")
+            put("iter", Crypto.PBKDF2_ITER)
+            put("salt", Crypto.b64(salt))
+            put("data", Crypto.b64(data))
+        }
+        return json.encodeToString(JsonObject.serializer(), o)
+    }
+
+    fun isEncryptedExport(text: String): Boolean = runCatching {
+        (json.parseToJsonElement(text.trim()) as? JsonObject)?.get("encrypted")?.let { (it as? JsonPrimitive)?.booleanOrNull } == true
+    }.getOrDefault(false)
+
+    /** Giải mã file xuất. Sai mật khẩu thì ném IllegalArgumentException. */
+    fun decryptExport(text: String, password: String): String {
+        val o = json.parseToJsonElement(text.trim()) as JsonObject
+        val salt = Crypto.unb64(o.str("salt") ?: throw IllegalArgumentException("File mã hóa bị hỏng."))
+        val data = Crypto.unb64(o.str("data") ?: throw IllegalArgumentException("File mã hóa bị hỏng."))
+        val iter = o.num("iter")?.toInt() ?: Crypto.PBKDF2_ITER
+        return try {
+            Crypto.decrypt(Crypto.deriveKey(password, salt, iter), data).decodeToString()
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Sai mật khẩu hoặc file bị hỏng.")
+        }
+    }
+
+    /**
      * Nhận object có mảng "accounts", object có mảng "books", hoặc một mảng sổ trực tiếp.
      * Sổ thiếu hoặc sai bị bỏ qua. Ném IllegalArgumentException khi nội dung không phải JSON hợp lệ.
      */
@@ -109,7 +179,17 @@ object Codec {
             val name = o.str("name")?.trim()?.take(40)?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
             val goal = o.num("goalAmount")?.toLong()?.takeIf { it > 0 }
             val goalDate = o.str("goalDate")?.let { runCatching { LocalDate.parse(it.take(10)).toString() }.getOrNull() }
-            Owner(id, name, goal, if (goal != null) goalDate else null)
+            val goals = (o["goals"] as? JsonArray).orEmpty().mapNotNull { ge ->
+                val g = ge as? JsonObject ?: return@mapNotNull null
+                val amt = g.num("amount")?.toLong()?.takeIf { it > 0 } ?: return@mapNotNull null
+                Goal(
+                    id = g.str("id")?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString(),
+                    name = g.str("name")?.trim()?.take(60)?.takeIf { it.isNotEmpty() } ?: "Mục tiêu",
+                    amount = amt,
+                    date = g.str("date")?.let { runCatching { LocalDate.parse(it.take(10)).toString() }.getOrNull() },
+                )
+            }.distinctBy { it.id }
+            Owner(id, name, goal, if (goal != null) goalDate else null, goals).normalized()
         }.distinctBy { it.id }
         return ImportResult(out, skipped, owners)
     }

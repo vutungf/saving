@@ -1,0 +1,15 @@
+rules_version = '2';
+
+// Mỗi người dùng chỉ đọc/ghi được đúng một tài liệu của mình: users/{uid}.
+// Nội dung tài liệu đã được app mã hóa trước khi gửi lên.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    // Chặn mọi thứ khác
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

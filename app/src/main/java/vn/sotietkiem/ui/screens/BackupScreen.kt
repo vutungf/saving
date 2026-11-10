@@ -52,18 +52,27 @@ import vn.sotietkiem.data.ImportResult
 import vn.sotietkiem.ui.AppViewModel
 import vn.sotietkiem.ui.components.ConfirmDialog
 import vn.sotietkiem.ui.components.OwnersCard
+import vn.sotietkiem.ui.components.CloudSettingsCard
+import vn.sotietkiem.ui.components.ExportTarget
+import vn.sotietkiem.ui.components.ImportPasswordDialog
+import vn.sotietkiem.ui.components.rememberExporter
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import vn.sotietkiem.ui.components.LockSettingsCard
+import vn.sotietkiem.util.AppLock
+import vn.sotietkiem.util.canUseBiometric
 import vn.sotietkiem.ui.components.SectionCard
 import vn.sotietkiem.util.Fmt
 import java.time.Instant
 import java.time.ZoneId
 
 @Composable
-fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding: PaddingValues) {
+fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding: PaddingValues, onOpenGoals: (String) -> Unit = {}) {
     val ctx = LocalContext.current
-    val clipboard = LocalClipboardManager.current
     var pending by remember { mutableStateOf<ImportResult?>(null) }
     var confirmReplace by remember { mutableStateOf(false) }
-    var showJson by remember { mutableStateOf<String?>(null) }
     var paste by remember { mutableStateOf(false) }
     var pasteText by remember { mutableStateOf("") }
     var clearStep by remember { mutableStateOf(0) }
@@ -72,7 +81,19 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
 
     fun toast(s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
 
+    val exporter = rememberExporter(vm) { toast(it) }
+    val scope = rememberCoroutineScope()
+    // File sao lưu đã mã hóa đang chờ nhập mật khẩu
+    var encryptedText by remember { mutableStateOf<String?>(null) }
+    var decrypting by remember { mutableStateOf(false) }
+    var decryptError by remember { mutableStateOf<String?>(null) }
+
     fun handleImport(text: String) {
+        if (Codec.isEncryptedExport(text)) {
+            decryptError = null
+            encryptedText = text
+            return
+        }
         try {
             val r = Codec.parseImport(text)
             if (r.accounts.isEmpty()) importError = "Không tìm thấy sổ hợp lệ nào trong file" + if (r.skipped > 0) " (${r.skipped} mục bị bỏ qua)." else "."
@@ -82,12 +103,6 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
         }
     }
 
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        val json = Codec.export(vm.accounts.value, vm.owners.value)
-        val ok = runCatching { ctx.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) } != null }.getOrDefault(false)
-        if (ok) { vm.markExported(); toast("Đã xuất $count sổ") } else showJson = json
-    }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val text = runCatching { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } }.getOrNull()
@@ -102,9 +117,13 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
             .padding(contentPadding).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        OwnersCard(vm)
+        CloudSettingsCard(vm)
 
-        SectionCard("Xuất file JSON") {
+        OwnersCard(vm, onOpenGoals)
+
+        LockSettingsCard(remember { AppLock(ctx) }, remember { canUseBiometric(ctx) })
+
+        SectionCard("Xuất file sao lưu") {
             Text(
                 "Lưu toàn bộ $count sổ ra file ${Codec.fileName()}. " +
                     if (lastExport == 0L) "Bạn chưa xuất file lần nào." else "Lần xuất gần nhất: ${Fmt.date(Instant.ofEpochMilli(lastExport).atZone(ZoneId.systemDefault()).toLocalDate())}.",
@@ -116,34 +135,24 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
                     color = MaterialTheme.colorScheme.error, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { exportLauncher.launch(Codec.fileName()) }, enabled = count > 0, modifier = Modifier.weight(1f)) {
+                Button(onClick = { exporter.start(ExportTarget.FILE) }, enabled = count > 0, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Outlined.FileDownload, null); Text(" Lưu file")
                 }
                 FilledTonalButton(
                     enabled = count > 0, modifier = Modifier.weight(1f),
-                    onClick = {
-                        val json = Codec.export(vm.accounts.value, vm.owners.value)
-                        val send = Intent(Intent.ACTION_SEND).apply {
-                            type = "application/json"
-                            putExtra(Intent.EXTRA_SUBJECT, Codec.fileName().removeSuffix(".json"))
-                            putExtra(Intent.EXTRA_TEXT, json)
-                        }
-                        runCatching { ctx.startActivity(Intent.createChooser(send, "Gửi bản sao lưu")) }
-                            .onSuccess { vm.markExported() }
-                            .onFailure { showJson = json }
-                    },
+                    onClick = { exporter.start(ExportTarget.SHARE) },
                 ) { Icon(Icons.Outlined.Share, null); Text(" Chia sẻ") }
             }
-            TextButton(enabled = count > 0, onClick = { showJson = Codec.export(vm.accounts.value, vm.owners.value) }) { Text("Xem nội dung JSON để sao chép") }
+            TextButton(enabled = count > 0, onClick = { exporter.start(ExportTarget.SHOW) }) { Text("Xem nội dung để sao chép") }
         }
 
-        SectionCard("Nhập file JSON") {
+        SectionCard("Nhập file sao lưu") {
             Text(
-                "Chọn file đã xuất trước đó, hoặc dán nội dung JSON. Các mục không hợp lệ sẽ được bỏ qua.",
+                "Chọn file đã xuất trước đó, hoặc dán nội dung. File mã hóa sẽ hỏi mật khẩu. Các mục không hợp lệ sẽ được bỏ qua.",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { importLauncher.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }, modifier = Modifier.weight(1f)) {
+                Button(onClick = { AppLock.skipNext = true; importLauncher.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Outlined.FileUpload, null); Text(" Chọn file")
                 }
                 FilledTonalButton(onClick = { pasteText = ""; paste = true }, modifier = Modifier.weight(1f)) {
@@ -166,7 +175,9 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
 
         SectionCard("Dữ liệu") {
             Text(
-                "Dữ liệu chỉ nằm trên điện thoại này. Gỡ app hoặc xóa dữ liệu app thì các sổ sẽ mất, nên hãy xuất file định kỳ.",
+                if (vm.cloud.state.collectAsState().value.ready)
+                    "Dữ liệu được lưu trên máy (mã hóa) và đồng bộ với tài khoản Google. Xóa toàn bộ dữ liệu ở đây cũng xóa trên mây và các máy khác."
+                else "Dữ liệu được mã hóa và chỉ nằm trên điện thoại này. Gỡ app hoặc xóa dữ liệu app thì các sổ sẽ mất, nên hãy xuất file định kỳ.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedButton(onClick = { vm.loadSample(); toast("Đã thêm 5 sổ mẫu") }, modifier = Modifier.fillMaxWidth()) {
@@ -237,24 +248,19 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
             dismissButton = { TextButton(onClick = { paste = false }) { Text("Hủy") } },
         )
     }
-    showJson?.let { json ->
-        AlertDialog(
-            onDismissRequest = { showJson = null },
-            title = { Text("Nội dung JSON") },
-            text = {
-                SelectionContainer {
-                    Text(
-                        json, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
-                    )
+    encryptedText?.let { text ->
+        ImportPasswordDialog(
+            busy = decrypting, error = decryptError,
+            onDismiss = { encryptedText = null },
+            onConfirm = { pw ->
+                decrypting = true
+                scope.launch {
+                    val plain = runCatching { withContext(Dispatchers.Default) { Codec.decryptExport(text, pw) } }
+                    decrypting = false
+                    plain.onSuccess { encryptedText = null; handleImport(it) }
+                        .onFailure { decryptError = it.message ?: "Sai mật khẩu hoặc file bị hỏng." }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    clipboard.setText(AnnotatedString(json)); vm.markExported(); toast("Đã sao chép"); showJson = null
-                }) { Text("Sao chép") }
-            },
-            dismissButton = { TextButton(onClick = { showJson = null }) { Text("Đóng") } },
         )
     }
     when (clearStep) {
