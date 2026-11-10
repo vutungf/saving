@@ -180,7 +180,7 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
                 else "Dữ liệu được mã hóa và chỉ nằm trên điện thoại này. Gỡ app hoặc xóa dữ liệu app thì các sổ sẽ mất, nên hãy xuất file định kỳ.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedButton(onClick = { vm.loadSample(); toast("Đã thêm 5 sổ mẫu") }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { vm.loadSample(); toast("Đã thêm 5 sổ, 2 người sở hữu và mục tiêu mẫu") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Xem thử với dữ liệu mẫu")
             }
             OutlinedButton(onClick = { clearStep = 1 }, enabled = count > 0, modifier = Modifier.fillMaxWidth()) {

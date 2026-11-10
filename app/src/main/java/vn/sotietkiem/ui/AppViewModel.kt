@@ -11,6 +11,7 @@ import vn.sotietkiem.data.Banks
 import vn.sotietkiem.data.InterestPayout
 import vn.sotietkiem.data.Owner
 import vn.sotietkiem.data.Goal
+import vn.sotietkiem.data.OwnerShare
 import vn.sotietkiem.data.Repository
 import vn.sotietkiem.domain.Calc
 import java.time.Instant
@@ -202,22 +203,51 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _lastExport.value = t
     }
 
+    /**
+     * Dữ liệu mẫu để xem thử: 2 người sở hữu (Bố, Mẹ) kèm mục tiêu, và 5 sổ chia phần cho từng người
+     * (một sổ để "Chưa gán"). Bấm nhiều lần không tạo trùng người hay mục tiêu.
+     */
     fun loadSample() {
         val t = LocalDate.now()
         val now = Instant.now().toString()
-        fun mk(name: String, code: String, amount: Long, start: LocalDate, term: Int, rate: Double, p: InterestPayout, note: String) =
-            Account(
-                id = UUID.randomUUID().toString(), name = name, amount = amount, startDate = start.toString(),
-                termMonths = term, maturityDate = Calc.maturityDate(start, term).toString(), interestRate = rate,
-                interestPayout = p, bankCode = code, bankName = Banks.find(code)?.name ?: code,
-                note = "[Mẫu] $note", createdAt = now, updatedAt = now,
-            )
+
+        // ---- Người sở hữu và mục tiêu mẫu (thứ tự = mức ưu tiên) ----
+        val bo = addOwner("Bố")
+        val me = addOwner("Mẹ")
+        fun ensureGoals(ownerId: String, goals: List<Triple<String, Long, LocalDate?>>) {
+            val have = _owners.value.firstOrNull { it.id == ownerId }?.goals?.map { it.name }?.toSet() ?: emptySet()
+            goals.filter { it.first !in have }.forEach { (n, amt, d) -> addGoal(ownerId, n, amt, d?.toString()) }
+        }
+        ensureGoals(bo.id, listOf(
+            Triple("Quỹ khẩn cấp", 100_000_000L, null),
+            Triple("Mua nhà", 1_500_000_000L, t.plusYears(2)),
+            Triple("Nghỉ hưu", 2_000_000_000L, t.plusYears(10)),
+        ))
+        ensureGoals(me.id, listOf(
+            Triple("Học phí đại học cho con", 500_000_000L, t.plusYears(3)),
+            Triple("Du lịch gia đình", 80_000_000L, t.plusMonths(8)),
+        ))
+
+        // ---- Sổ mẫu ----
+        fun mk(
+            name: String, code: String, amount: Long, start: LocalDate, term: Int, rate: Double, p: InterestPayout,
+            note: String, shares: List<OwnerShare> = emptyList(),
+        ) = Account(
+            id = UUID.randomUUID().toString(), name = name, amount = amount, startDate = start.toString(),
+            termMonths = term, maturityDate = Calc.maturityDate(start, term).toString(), interestRate = rate,
+            interestPayout = p, bankCode = code, bankName = Banks.find(code)?.name ?: code,
+            note = "[Mẫu] $note", createdAt = now, updatedAt = now, owners = shares,
+        )
         val sample = listOf(
-            mk("Quỹ mua nhà", "VCB", 500_000_000, t.minusMonths(7), 12, 4.8, InterestPayout.MATURITY, "Sổ giấy, chi nhánh Bến Thành"),
-            mk("Quỹ dự phòng", "TCB", 120_000_000, t.minusMonths(2).minusDays(20), 3, 4.3, InterestPayout.MATURITY, "Gửi online"),
-            mk("Tiền học cho con", "BIDV", 200_000_000, t.minusMonths(6).minusDays(3), 6, 4.7, InterestPayout.MONTHLY, "Lĩnh lãi hàng tháng"),
-            mk("Gửi thử Cake", "CAKE", 50_000_000, t.minusMonths(1).minusDays(5), 1, 4.1, InterestPayout.MATURITY, "Ngân hàng số"),
-            mk("Quỹ hưu trí", "ACB", 300_000_000, t.minusMonths(3), 24, 5.6, InterestPayout.MATURITY, "Kỳ hạn dài"),
+            mk("Quỹ mua nhà", "VCB", 500_000_000, t.minusMonths(7), 12, 4.8, InterestPayout.MATURITY, "Sổ giấy, chi nhánh Bến Thành",
+                listOf(OwnerShare(bo.id, 300_000_000), OwnerShare(me.id, 200_000_000))),
+            mk("Quỹ dự phòng", "TCB", 120_000_000, t.minusMonths(2).minusDays(20), 3, 4.3, InterestPayout.MATURITY, "Gửi online",
+                listOf(OwnerShare(me.id, 120_000_000))),
+            mk("Tiền học cho con", "BIDV", 200_000_000, t.minusMonths(6).minusDays(3), 6, 4.7, InterestPayout.MONTHLY, "Lĩnh lãi hàng tháng",
+                listOf(OwnerShare(bo.id, 100_000_000), OwnerShare(me.id, 100_000_000))),
+            mk("Gửi thử Cake", "CAKE", 50_000_000, t.minusMonths(1).minusDays(5), 1, 4.1, InterestPayout.MATURITY, "Ngân hàng số, chưa gán người sở hữu"),
+            mk("Quỹ hưu trí", "ACB", 300_000_000, t.minusMonths(3), 24, 5.6, InterestPayout.MATURITY, "Kỳ hạn dài",
+                listOf(OwnerShare(bo.id, 300_000_000))),
         )
         commit(_accounts.value + sample)
     }

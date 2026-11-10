@@ -96,7 +96,16 @@ Hai lựa chọn: *Lưu trên máy này* hoặc *Đăng nhập Google để đ�
 - **Xuất file sao lưu:** lưu file `so-tiet-kiem-YYYY-MM-DD.json`, chia sẻ qua app khác, hoặc xem nội dung để sao chép. Trước khi xuất, app hỏi **mật khẩu mã hóa** (mặc định bật, ít nhất 6 ký tự, nhập 2 lần); có thể tắt để xuất file thường. Có dòng chữ đỏ khi có thay đổi chưa sao lưu.
 - **Nhập file sao lưu:** chọn file hoặc dán nội dung. File mã hóa thì hỏi mật khẩu. Các mục sai bị bỏ qua. Sau đó chọn *Gộp vào hiện tại* (bỏ qua sổ trùng ID) hoặc *Thay thế toàn bộ* (có hỏi xác nhận).
 - **Nhắc đáo hạn:** thông báo trước 3 ngày và vào đúng ngày đáo hạn.
-- **Dữ liệu:** tạo 5 sổ mẫu để xem thử; xóa toàn bộ dữ liệu (phải xác nhận hai lần).
+- **Dữ liệu:**
+  - *Xem thử với dữ liệu mẫu* (cũng có ở màn Tổng quan khi chưa có sổ nào): tạo 2 người sở hữu, mục tiêu và 5 sổ chia phần, ghi chú bắt đầu bằng `[Mẫu]`. Bấm lại không tạo trùng người hay mục tiêu.
+
+    | Người | Mục tiêu (theo thứ tự ưu tiên) | Phần trong các sổ |
+    |---|---|---|
+    | Bố | Quỹ khẩn cấp 100 tr · Mua nhà 1,5 tỷ (hạn 2 năm) · Nghỉ hưu 2 tỷ (hạn 10 năm) | Quỹ mua nhà 300 tr, Tiền học cho con 100 tr, Quỹ hưu trí 300 tr |
+    | Mẹ | Học phí đại học cho con 500 tr (hạn 3 năm) · Du lịch gia đình 80 tr (hạn 8 tháng) | Quỹ mua nhà 200 tr, Quỹ dự phòng 120 tr, Tiền học cho con 100 tr |
+    | Chưa gán | | Gửi thử Cake 50 tr |
+
+  - xóa toàn bộ dữ liệu (phải xác nhận hai lần).
 - Biểu tượng tab Cài đặt có **chấm đỏ** khi có thay đổi chưa xuất file.
 
 ### Cách app tính
