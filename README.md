@@ -243,7 +243,7 @@ Quy tắc khi nhập file:
 
 **Đồng bộ Google:** cần thêm `app/google-services.json`, xem [FIREBASE_SETUP.md](FIREBASE_SETUP.md). Thiếu file này app vẫn build được, chỉ ẩn tùy chọn đồng bộ.
 
-**GitHub Actions:** mỗi lần push, workflow `.github/workflows/android.yml` build APK. Tải ở tab Actions → lần chạy mới nhất → Artifacts → `so-tiet-kiem-apk`.
+**GitHub Actions:** mỗi lần push, workflow `.github/workflows/android.yml` build APK. Tải ở tab Actions → lần chạy mới nhất → Artifacts → `so-tiet-kiem-apk`. Để APK này đăng nhập Google được, thêm secret `DEBUG_KEYSTORE_BASE64` (xem mục 6 trong [FIREBASE_SETUP.md](FIREBASE_SETUP.md)).
 
 Bản release đang ký bằng khóa debug để cài thử được ngay. Trước khi đưa lên Google Play, hãy tạo keystore riêng và sửa `signingConfig` trong `app/build.gradle.kts`.
 

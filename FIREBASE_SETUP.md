@@ -40,6 +40,19 @@ Chưa làm các bước này thì app vẫn build và chạy bình thường, ch
 3. Chọn tài khoản Google, tạo **mật khẩu đồng bộ** (ít nhất 8 ký tự).
 4. Trên Firebase Console → Firestore → Data sẽ thấy `users/{mã người dùng}` với các trường `salt`, `check`, `data`… Nội dung `data` là chuỗi đã mã hóa, không đọc được.
 
+## 6. APK build trên GitHub Actions
+
+Để APK tải từ tab Actions đăng nhập Google được, GitHub phải ký app bằng **cùng khóa debug** với máy của bạn (cùng SHA-1 đã thêm ở bước 2):
+
+1. Trên máy Windows, mở PowerShell và chạy (chép khóa dưới dạng chữ vào clipboard):
+   ```powershell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\.android\debug.keystore")) | Set-Clipboard
+   ```
+2. GitHub → repo → **Settings → Secrets and variables → Actions → New repository secret**. Tên: `DEBUG_KEYSTORE_BASE64`, dán nội dung vừa chép, **Add secret**.
+3. Push hoặc bấm **Run workflow**. Trong log bước *Restore debug keystore* sẽ in SHA-1; phải trùng SHA-1 trên Firebase.
+
+Chưa có secret thì workflow vẫn build, kèm cảnh báo, nhưng APK đó không đăng nhập Google được.
+
 ## Dữ liệu được lưu thế nào
 
 | Trường | Ý nghĩa |
