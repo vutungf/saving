@@ -74,4 +74,5 @@ data class BackupFile(
     val exportedAt: String,
     val owners: List<Owner> = emptyList(),
     val accounts: List<Account>,
+    val jobs: List<Job> = emptyList(),
 )

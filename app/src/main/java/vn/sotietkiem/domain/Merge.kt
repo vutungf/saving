@@ -2,6 +2,7 @@ package vn.sotietkiem.domain
 
 import kotlinx.serialization.Serializable
 import vn.sotietkiem.data.Account
+import vn.sotietkiem.data.Job
 import vn.sotietkiem.data.Owner
 import java.time.Instant
 
@@ -12,6 +13,7 @@ data class SyncData(
     val owners: List<Owner> = emptyList(),
     /** Mã đã xóa → thời điểm xóa (ISO). */
     val deleted: Map<String, String> = emptyMap(),
+    val jobs: List<Job> = emptyList(),
 )
 
 private fun ts(s: String?): Instant = s?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: Instant.EPOCH
@@ -39,9 +41,18 @@ fun merge(local: SyncData, remote: SyncData, now: Instant = Instant.now(), keepD
 
     val accounts = pick(local.accounts, remote.accounts, { it.id }, { it.updatedAt })
     val owners = pick(local.owners, remote.owners, { it.id }, { it.updatedAt })
+    // Công việc: thông tin chung lấy bản sửa sau; các dòng giờ thì gộp cả hai bên (trừ dòng đã xóa),
+    // để hai máy cùng thêm giờ không làm mất của nhau
+    val remoteJobs = remote.jobs.associateBy { it.id }
+    val localJobs = local.jobs.associateBy { it.id }
+    val jobs = pick(local.jobs, remote.jobs, { it.id }, { it.updatedAt }).map { j ->
+        val all = (localJobs[j.id]?.entries.orEmpty() + remoteJobs[j.id]?.entries.orEmpty())
+        val entries = all.distinctBy { it.id }.filter { e -> deleted[e.id] == null }.sortedWith(compareBy({ it.date }, { it.createdAt }))
+        j.copy(entries = entries)
+    }
     // Bản ghi còn sống thì bỏ dấu xóa (đã được tạo lại hoặc sửa sau khi xóa)
-    val aliveIds = (accounts.map { it.id } + owners.map { it.id }).toSet()
+    val aliveIds = (accounts.map { it.id } + owners.map { it.id } + jobs.map { it.id } + jobs.flatMap { j -> j.entries.map { it.id } }).toSet()
     val cutoff = now.minusSeconds(keepDeletedDays * 86_400)
     val keptDeleted = deleted.filter { (id, t) -> id !in aliveIds && ts(t) > cutoff }
-    return SyncData(accounts, owners, keptDeleted)
+    return SyncData(accounts, owners, keptDeleted, jobs)
 }

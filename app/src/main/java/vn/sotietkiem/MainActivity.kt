@@ -7,6 +7,14 @@ import vn.sotietkiem.util.canUseBiometric
 import vn.sotietkiem.util.showBiometricPrompt
 import vn.sotietkiem.ui.screens.LockScreen
 import vn.sotietkiem.ui.screens.WelcomeScreen
+import vn.sotietkiem.ui.screens.JobActions
+import vn.sotietkiem.ui.screens.JobDetailScreen
+import vn.sotietkiem.ui.screens.JobsScreen
+import vn.sotietkiem.ui.components.JobEditDialog
+import vn.sotietkiem.data.Job
+import vn.sotietkiem.util.Fmt
+import java.time.LocalDate
+import androidx.compose.material.icons.outlined.Work
 import vn.sotietkiem.ui.components.CloudDialogs
 import androidx.lifecycle.lifecycleScope
 import androidx.activity.compose.BackHandler
@@ -134,7 +142,7 @@ class MainActivity : FragmentActivity() {
     }
 }
 
-private enum class Tab(val label: String) { OVERVIEW("Tổng quan"), ACCOUNTS("Sổ của tôi"), BACKUP("Cài đặt") }
+private enum class Tab(val label: String) { OVERVIEW("Tổng quan"), ACCOUNTS("Sổ của tôi"), JOBS("Công việc"), BACKUP("Cài đặt") }
 
 /** Form đang mở: sửa sổ [editId], hoặc tái tục từ sổ [renewId], hoặc cả hai null = thêm mới. */
 private data class FormTarget(val editId: String?, val renewId: String?)
@@ -162,6 +170,10 @@ private fun App(vm: AppViewModel) {
     var formOpen by rememberSaveable { mutableStateOf(false) }
     var detailId by rememberSaveable { mutableStateOf<String?>(null) }
     var goalsOwnerId by rememberSaveable { mutableStateOf<String?>(null) }
+    var jobDetailId by rememberSaveable { mutableStateOf<String?>(null) }
+    var addingJob by remember { mutableStateOf(false) }
+    var jobOwnerFilter by rememberSaveable { mutableStateOf(OwnerScope.ALL) }
+    val jobs by vm.jobs.collectAsStateWithLifecycle()
     var askClose by remember { mutableStateOf<Account?>(null) }
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -201,6 +213,42 @@ private fun App(vm: AppViewModel) {
                 changed("Đã mở lại \"${a.name}\"")
             }
         }
+    }
+
+    val jobActions = remember(vm) {
+        object : JobActions {
+            override fun update(id: String, name: String, rate: Long, start: LocalDate, target: Double, note: String, ownerId: String?) =
+                vm.updateJob(id, name, rate, start.toString(), target, note, ownerId)
+            override fun addHours(id: String, hours: Double, date: LocalDate, note: String) {
+                vm.addHours(id, hours, date.toString(), note)
+                changed(if (hours >= 0) "Đã thêm ${Fmt.hours(hours)} giờ" else "Đã bớt ${Fmt.hours(-hours)} giờ")
+            }
+            override fun pay(id: String, hours: Double, date: LocalDate, note: String) {
+                vm.pay(id, hours, date.toString(), note)
+                changed("Đã ghi nhận thanh toán ${Fmt.hours(hours)} giờ")
+            }
+            override fun deleteEntry(id: String, entryId: String) = vm.deleteEntry(id, entryId)
+            override fun setClosed(id: String, closed: Boolean) = vm.setJobClosed(id, closed)
+            override fun delete(id: String) {
+                vm.deleteJob(id)
+                jobDetailId = null
+                changed("Đã xóa công việc")
+            }
+        }
+    }
+
+    /** Nút nhanh trên thẻ công việc: thêm/bớt giờ vào hôm nay (không sớm hơn ngày bắt đầu). */
+    fun quickHours(j: Job, delta: Double) {
+        val start = runCatching { LocalDate.parse(j.startDate) }.getOrNull()
+        val day = LocalDate.now().let { if (start != null && it.isBefore(start)) start else it }
+        jobActions.addHours(j.id, delta, day, "")
+    }
+
+    if (addingJob) {
+        JobEditDialog(null, owners, onSave = { n, r, s, t, note, unpaid, oid ->
+            val job = vm.addJob(n, r, s.toString(), t, note, unpaid, oid)
+            changed("Đã thêm công việc \"${job.name}\"")
+        }, onDismiss = { addingJob = false }, defaultOwnerId = jobOwnerFilter)
     }
 
     val goalActions = remember(vm) {
@@ -248,6 +296,14 @@ private fun App(vm: AppViewModel) {
         return
     }
 
+    // Trang chi tiết công việc
+    val jobDetail = jobDetailId?.let { id -> jobs.firstOrNull { it.id == id } }
+    if (jobDetail != null) {
+        BackHandler { jobDetailId = null }
+        JobDetailScreen(jobDetail, owners, jobActions, onBack = { jobDetailId = null })
+        return
+    }
+
     // Trang mục tiêu của một người (mở từ Tổng quan hoặc Cài đặt)
     val goalsOwner = goalsOwnerId?.let { id -> owners.firstOrNull { it.id == id } }
     if (goalsOwner != null) {
@@ -283,6 +339,7 @@ private fun App(vm: AppViewModel) {
                                     when (t) {
                                         Tab.OVERVIEW -> Icons.Outlined.Dashboard
                                         Tab.ACCOUNTS -> Icons.Outlined.Savings
+                                        Tab.JOBS -> Icons.Outlined.Work
                                         Tab.BACKUP -> Icons.Outlined.Settings
                                     }, null,
                                 )
@@ -294,6 +351,13 @@ private fun App(vm: AppViewModel) {
             }
         },
         floatingActionButton = {
+            if (tab == Tab.JOBS && jobs.isNotEmpty()) {
+                ExtendedFloatingActionButton(
+                    onClick = { addingJob = true },
+                    icon = { Icon(Icons.Outlined.Add, null) },
+                    text = { Text("Thêm công việc") },
+                )
+            }
             if (tab == Tab.ACCOUNTS || (tab == Tab.OVERVIEW && accounts.isNotEmpty())) {
                 ExtendedFloatingActionButton(
                     onClick = { openForm(FormTarget(null, null)) },
@@ -316,8 +380,12 @@ private fun App(vm: AppViewModel) {
                     unsaved = unsaved,
                     onExport = { exportNow() },
                     onOpenGoals = { goalsOwnerId = it },
+                    jobs = jobs,
+                    // Mở tab Công việc, lọc sẵn theo người đang xem ở Tổng quan
+                    onOpenJobs = { jobOwnerFilter = ownerScope; tab = Tab.JOBS },
                 )
                 Tab.ACCOUNTS -> AccountsScreen(accounts, owners, now, pad, actions)
+                Tab.JOBS -> JobsScreen(jobs, owners, jobOwnerFilter, { jobOwnerFilter = it }, pad, onOpen = { jobDetailId = it.id }, onQuickHours = ::quickHours, onAdd = { addingJob = true })
                 Tab.BACKUP -> BackupScreen(vm, accounts.size, lastExport, pad, onOpenGoals = { goalsOwnerId = it })
             }
             }

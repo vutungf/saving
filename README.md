@@ -16,6 +16,7 @@ App Android native (Kotlin + Jetpack Compose). App theo dõi các sổ tiết ki
 - **Phạm vi thống kê:** chọn *Tất cả*, *từng người sở hữu* hoặc *Chưa gán*. Khi chọn một người, mọi con số chỉ tính phần tiền của người đó trong từng sổ.
 - **Mục tiêu:** ở chế độ *Tất cả*, liệt kê các mục tiêu của từng người theo thứ tự ưu tiên (bấm tên người để xem thống kê riêng, bấm *Quản lý* để mở trang mục tiêu). Khi đang xem một người, chỉ hiện mục tiêu của người đó.
 - **Khối chính:** tổng tiền gốc đang gửi (kèm số tiền bằng chữ và số sổ), lãi tích lũy tăng theo từng giây, lãi sinh thêm mỗi ngày.
+- **Công việc:** thẻ tóm tắt công việc của người đang xem (hoặc tất cả): tiền và giờ chưa thanh toán, giờ tháng này / mục tiêu, thanh tiến độ từng công việc. Bấm vào để mở tab Công việc, lọc sẵn theo người đó.
 - **Dải số liệu:** lãi dự kiến cả kỳ, tổng nhận khi đáo hạn, lãi suất bình quân có trọng số theo số tiền, số sổ đang gửi.
 - **Đến hạn trong 30 ngày tới:** các sổ sắp hoặc đã đáo hạn. Bấm một dòng để mở trang chi tiết. Sổ đã đáo hạn có sẵn nút *Tái tục* và *Tất toán*.
 - **Tính tiền về đến ngày:** chọn một ngày (hoặc bấm nhanh *Cuối tháng*, *3 tháng*, *Cuối năm*) để xem tổng tiền lãi, tiền gốc và tổng gốc cộng lãi của các sổ đáo hạn đến hết ngày đó. Mặc định không tính sổ đã tất toán; bật *Tính cả sổ đã tất toán* nếu muốn. Bấm "Xem N sổ" để xem từng sổ được tính.
@@ -35,6 +36,23 @@ App Android native (Kotlin + Jetpack Compose). App theo dõi các sổ tiết ki
 - **Sắp xếp:** đáo hạn sớm nhất, số tiền lớn nhất, lãi suất cao nhất hoặc mới thêm gần đây.
 - Bấm vào thẻ để mở **trang chi tiết**. Menu ⋮ trên thẻ có Sửa, Tái tục, Tất toán hoặc Mở lại, và Xóa.
 - Bộ lọc, ô tìm kiếm và vị trí cuộn được **giữ nguyên** khi mở trang chi tiết hoặc form rồi quay lại.
+
+### Tab Công việc
+
+Theo dõi các công việc tính tiền theo giờ (dạy kèm, làm thêm...).
+
+- **Theo người sở hữu:** mỗi công việc gán cho một người (hoặc *Chưa gán*). Đầu tab có hàng lọc *Mọi người / từng người (số công việc) / Chưa gán*; tổng tiền chưa thanh toán và giờ tháng này tính theo người đang lọc. Thêm công việc khi đang lọc một người thì mặc định gán cho người đó. Mỗi thẻ hiện tên người.
+- **Thêm công việc** (nút *Thêm công việc*): **người sở hữu**, tên, **số tiền mỗi giờ**, **ngày bắt đầu**, **mục tiêu số giờ mỗi tháng** (không bắt buộc), số giờ chưa thanh toán hiện có (nếu có), ghi chú.
+- **Đầu tab:** tổng tiền và tổng giờ chưa thanh toán của các công việc đang làm, tổng giờ tháng này.
+- **Mỗi thẻ công việc:** giá mỗi giờ, số giờ và số tiền chưa thanh toán, tiến độ tháng này (số giờ / mục tiêu, **%**), nút nhanh **−1 giờ, −0,5, +0,5, +1 giờ** ghi vào hôm nay.
+- **Trang chi tiết** (bấm vào thẻ):
+  - *Chưa thanh toán:* số tiền = giờ chưa thanh toán × giá mỗi giờ hiện tại; nút **Ghi nhận thanh toán** (mặc định toàn bộ số giờ, sửa được số giờ, chọn ngày nhận);
+  - *Theo tháng:* chuyển tháng bằng ◀ ▶ (từ tháng bắt đầu tới tháng hiện tại); số giờ / mục tiêu và **%**, thanh tiến độ; tháng đang chạy có thêm nhịp cần đạt tới hôm nay (mục tiêu chia đều theo ngày), báo chậm bao nhiêu giờ; tiền làm ra trong tháng;
+  - **Thêm giờ / Bớt giờ:** số giờ (chọn nhanh 0,5 / 1 / 2 / 4 / 8 hoặc nhập, nhận dấu phẩy), ngày, ghi chú;
+  - lịch sử ghi nhận trong tháng (thêm, bớt, thanh toán), xóa được từng dòng;
+  - **Sửa** (bút chì): đổi người sở hữu, tên, **số tiền mỗi giờ**, ngày bắt đầu, mục tiêu tháng. Đổi giá thì số tiền chưa thanh toán tính lại theo giá mới; các lần đã thanh toán giữ nguyên số tiền lúc đó;
+  - menu ⋮: *Tạm dừng / Tiếp tục* công việc, *Xóa* công việc.
+- Thanh tiến độ màu xanh khi đạt mục tiêu, màu chính khi đúng nhịp, màu cam khi đang chậm.
 
 ### Trang chi tiết sổ
 
@@ -78,7 +96,7 @@ Hai lựa chọn: *Lưu trên máy này* hoặc *Đăng nhập Google để đ�
   - mất mạng thì vẫn dùng bình thường, lần sau có mạng sẽ đồng bộ;
   - đang đồng bộ thì lần đồng bộ thành công cũng tính là đã sao lưu (tắt dòng nhắc xuất file).
 
-- **Người sở hữu:** thêm, đổi tên (bút chì), xóa. Mỗi người có một màu riêng. Chỉ xóa được người không còn phần trong sổ nào.
+- **Người sở hữu:** thêm, đổi tên (bút chì), xóa. Mỗi người có một màu riêng, hiện số sổ và số công việc. Chỉ xóa được người không còn phần trong sổ nào và không còn công việc nào.
 - **Mục tiêu** (biểu tượng lá cờ cạnh mỗi người): mở trang mục tiêu của người đó.
   - Một người có **nhiều mục tiêu**, mỗi mục tiêu gồm tên, số tiền và hạn (hạn không bắt buộc).
   - Thứ tự từ trên xuống là **mức ưu tiên**; đổi thứ tự bằng mũi tên lên/xuống.
@@ -105,6 +123,8 @@ Hai lựa chọn: *Lưu trên máy này* hoặc *Đăng nhập Google để đ�
     | Mẹ | Học phí đại học cho con 500 tr (hạn 3 năm) · Du lịch gia đình 80 tr (hạn 8 tháng) | Quỹ mua nhà 200 tr, Quỹ dự phòng 120 tr, Tiền học cho con 100 tr |
     | Chưa gán | | Gửi thử Cake 50 tr |
 
+    Kèm một công việc *Dạy kèm Toán (mẫu)* của Mẹ: 200.000 ₫/giờ, mục tiêu 30 giờ/tháng, bắt đầu từ 2 tháng trước, có giờ làm, một lần bớt giờ và một lần thanh toán.
+
   - xóa toàn bộ dữ liệu (phải xác nhận hai lần).
 - Biểu tượng tab Cài đặt có **chấm đỏ** khi có thay đổi chưa xuất file.
 
@@ -118,6 +138,7 @@ Hai lựa chọn: *Lưu trên máy này* hoặc *Đăng nhập Google để đ�
   - *Sắp đáo hạn:* còn từ 1 đến 30 ngày;
   - *Đã đáo hạn:* từ chính ngày đáo hạn trở đi, khi chưa tất toán;
   - *Đã tất toán:* người dùng đã đóng sổ.
+- **Công việc:** giờ chưa thanh toán = tổng giờ đã thêm − giờ đã bớt − giờ đã thanh toán; tiền chưa thanh toán = số giờ đó × giá mỗi giờ hiện tại. Giờ trong tháng tính theo ngày ghi nhận; % = giờ trong tháng / mục tiêu tháng.
 - **Theo người sở hữu:** mỗi sổ chỉ tính phần gốc của người đó. Lãi đơn tỷ lệ thuận với gốc, nên lãi của từng người cũng chia theo tỷ lệ đó.
 
 ## Danh sách ngân hàng
@@ -229,14 +250,26 @@ Giải mã `data` ra đúng nội dung file JSON không mã hóa mô tả ở m�
 | `closed` | boolean | Sổ đã tất toán hay chưa |
 | `owners` | mảng | Phần tiền của từng người: `ownerId` và `amount`. Mảng rỗng nghĩa là *Chưa gán* |
 
+**Công việc** (`jobs`, có trong file xuất từ bản có tab Công việc):
+
+| Trường | Kiểu | Ý nghĩa |
+|---|---|---|
+| `id`, `name` | chuỗi | Mã và tên công việc |
+| `rate` | số nguyên | Số tiền mỗi giờ (VND) |
+| `startDate` | `YYYY-MM-DD` | Ngày bắt đầu |
+| `monthlyTarget` | số | Mục tiêu giờ mỗi tháng, 0 = không đặt |
+| `closed` | boolean | Đang tạm dừng |
+| `ownerId` | chuỗi hoặc `null` | Người sở hữu; không có trong danh sách người thì thành *Chưa gán* khi nhập |
+| `entries` | mảng | Các lần ghi nhận: `id`, `kind` (`work` = thêm/bớt giờ, `payment` = thanh toán), `date`, `hours` (âm là bớt giờ), `amount` (số tiền nhận, chỉ với `payment`), `note` |
+
 Quy tắc khi nhập file:
 
 - App chấp nhận một trong ba dạng: object có mảng `accounts`, object có mảng `books`, hoặc một mảng sổ trực tiếp.
 - Mỗi sổ phải có tên, số tiền lớn hơn 0, ngày gửi hợp lệ, kỳ hạn từ 1 đến 600 tháng và lãi suất từ 0 đến 100%. Sổ nào thiếu hoặc sai thì bị bỏ qua.
-- File cũ không có `owners` vẫn nhập được; các sổ sẽ là *Chưa gán*.
+- File cũ không có `owners` vẫn nhập được; các sổ sẽ là *Chưa gán*. File không có `jobs` thì không thêm công việc nào.
 - Phần người sở hữu của một sổ chỉ được giữ khi mỗi phần lớn hơn 0, không trùng người và tổng bằng `amount`. Sai thì sổ vẫn được nhập nhưng thành *Chưa gán*.
 - Phần nào trỏ tới người không có trong danh sách thì sổ đó thành *Chưa gán*.
-- *Gộp* thêm những người sở hữu chưa có (theo `id`) và bỏ qua sổ trùng `id`. *Thay thế* dùng danh sách người và sổ trong file.
+- *Gộp* thêm những người sở hữu và công việc chưa có (theo `id`) và bỏ qua sổ trùng `id`. *Thay thế* dùng danh sách người, sổ và công việc trong file.
 
 ## Build
 
@@ -280,6 +313,11 @@ app/src/main/java/vn/sotietkiem/
   ui/screens/DetailScreen.kt      Trang chi tiết sổ
   ui/screens/FormScreen.kt        Thêm, sửa, tái tục; chọn ngân hàng; chia phần người sở hữu
   ui/screens/BackupScreen.kt      Cài đặt: người sở hữu, khóa ứng dụng, sao lưu, nhắc đáo hạn, dữ liệu
+  data/Job.kt                     công việc tính theo giờ và các lần ghi nhận (thêm/bớt giờ, thanh toán)
+  domain/Jobs.kt                  giờ chưa thanh toán, giờ và % mục tiêu theo tháng, nhịp tới hôm nay
+  ui/screens/JobsScreen.kt        Tab Công việc
+  ui/screens/JobDetailScreen.kt   Chi tiết công việc theo tháng, lịch sử
+  ui/components/JobDialogs.kt     Thêm/sửa công việc, thêm/bớt giờ, thanh toán
   ui/screens/GoalsScreen.kt       Mục tiêu của một người: thêm, sửa, xóa, đổi thứ tự
   ui/screens/WelcomeScreen.kt     Màn chào: chọn lưu trên máy hoặc đăng nhập Google
   ui/components/CloudSettings.kt  Thẻ Lưu trữ và đồng bộ, hộp thoại mật khẩu đồng bộ
@@ -304,6 +342,7 @@ app/src/main/java/vn/sotietkiem/
 | — | Nhiều mục tiêu tiền gốc cho từng người, sắp xếp theo ưu tiên |
 | — | Khóa ứng dụng bằng mã PIN, hình vẽ, vân tay hoặc khuôn mặt |
 | — | Tính tiền về đến một ngày chọn |
+| — | Tab Công việc: giờ làm, giờ chưa thanh toán, mục tiêu giờ mỗi tháng |
 | — | Tên sổ tự động "Tiết kiệm N" |
 | — | Nhắc sao lưu khi có thay đổi chưa xuất file |
 | — | Thông báo nhắc đáo hạn |

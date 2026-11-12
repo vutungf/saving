@@ -99,6 +99,7 @@ fun OwnerNameDialog(title: String, initial: String = "", onDone: (String) -> Uni
 fun OwnersCard(vm: AppViewModel, onOpenGoals: (String) -> Unit = {}) {
     val owners by vm.owners.collectAsState()
     val accounts by vm.accounts.collectAsState()
+    val jobs by vm.jobs.collectAsState()
     var adding by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<Owner?>(null) }
     var deleting by remember { mutableStateOf<Owner?>(null) }
@@ -112,13 +113,14 @@ fun OwnersCard(vm: AppViewModel, onOpenGoals: (String) -> Unit = {}) {
         }
         owners.forEach { o ->
             val used = accounts.count { a -> a.owners.any { it.ownerId == o.id } }
+            val jobCount = jobs.count { it.ownerId == o.id }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OwnerAvatar(o.name, ownerColor(owners, o.id), 32.dp)
                 Column(Modifier.weight(1f)) {
                     Text(o.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                     val progress = goalsOf(o, accounts)
                     Text(
-                        (if (used == 0) "Chưa có sổ nào" else "$used sổ") + " · " +
+                        (if (used == 0) "Chưa có sổ nào" else "$used sổ") + (if (jobCount > 0) " · $jobCount công việc" else "") + " · " +
                             if (progress.isEmpty()) "chưa có mục tiêu"
                             else "${progress.size} mục tiêu, đạt ${progress.count { it.reached }}",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -140,11 +142,19 @@ fun OwnersCard(vm: AppViewModel, onOpenGoals: (String) -> Unit = {}) {
     }
     deleting?.let { o ->
         val used = vm.ownerUsage(o.id)
-        if (used > 0) {
+        val jobsUsed = vm.ownerJobCount(o.id)
+        if (used > 0 || jobsUsed > 0) {
             AlertDialog(
                 onDismissRequest = { deleting = null },
                 title = { Text("Chưa xóa được") },
-                text = { Text("${o.name} đang có phần trong $used sổ. Hãy sửa các sổ đó để bỏ ${o.name} ra trước.") },
+                text = {
+                    Text(
+                        "${o.name} đang có " + listOfNotNull(
+                            if (used > 0) "phần trong $used sổ" else null,
+                            if (jobsUsed > 0) "$jobsUsed công việc" else null,
+                        ).joinToString(" và ") + ". Hãy sửa các sổ / công việc đó để bỏ ${o.name} ra trước."
+                    )
+                },
                 confirmButton = { TextButton(onClick = { deleting = null }) { Text("Đã hiểu") } },
             )
         } else {

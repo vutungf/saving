@@ -52,6 +52,16 @@ object Fmt {
     /** Nhận "5,2" hoặc "5.2". */
     fun parseRate(s: String): Double? = s.trim().replace(',', '.').takeIf { it.isNotEmpty() }?.toDoubleOrNull()
 
+    /** Số giờ: 12.5 -> "12,5", 3.0 -> "3", 1.25 -> "1,25". */
+    fun hours(h: Double): String {
+        val r = Math.round(h * 100) / 100.0
+        val txt = if (r == r.toLong().toDouble()) r.toLong().toString() else r.toString()
+        return txt.replace('.', ',')
+    }
+
+    /** Nhận "1,5" hoặc "1.5"; null nếu không hợp lệ. */
+    fun parseHours(s: String): Double? = s.trim().replace(',', '.').takeIf { it.isNotEmpty() }?.toDoubleOrNull()
+
     /** Bỏ dấu tiếng Việt, chữ thường, để tìm kiếm không dấu. */
     fun fold(s: String): String {
         val n = Normalizer.normalize(s, Normalizer.Form.NFD)

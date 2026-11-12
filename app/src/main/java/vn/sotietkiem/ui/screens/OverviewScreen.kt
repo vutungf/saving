@@ -53,6 +53,7 @@ import vn.sotietkiem.data.Owner
 import vn.sotietkiem.domain.OwnerScope
 import vn.sotietkiem.domain.ownerAllocation
 import vn.sotietkiem.domain.goalsOf
+import vn.sotietkiem.domain.JobCalc
 import vn.sotietkiem.ui.components.GoalBar
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -81,6 +82,8 @@ fun OverviewScreen(
     unsaved: Boolean = false,
     onExport: () -> Unit = onBackup,
     onOpenGoals: (String) -> Unit = {},
+    jobs: List<vn.sotietkiem.data.Job> = emptyList(),
+    onOpenJobs: () -> Unit = {},
 ) {
     // Thống kê theo người sở hữu: mỗi sổ chỉ tính phần tiền của người được chọn
     val accounts = OwnerScope.apply(allAccounts, scope)
@@ -113,6 +116,44 @@ fun OverviewScreen(
         }
 
         item { Hero(sum.principal, sum.openAccounts.size, sum.openAccounts.sumOf { Calc.accrued(it, nowMillis) }, sum.dailyInterest) }
+
+        // Công việc của người đang xem (hoặc tất cả): tiền chưa thanh toán và giờ tháng này
+        val scopedJobs = jobs.filter { j ->
+            !j.closed && when (scope) {
+                OwnerScope.ALL -> true
+                OwnerScope.UNASSIGNED -> j.ownerId == null || owners.none { it.id == j.ownerId }
+                else -> j.ownerId == scope
+            }
+        }
+        if (scopedJobs.isNotEmpty()) item {
+            val ym = java.time.YearMonth.now()
+            SectionCard(
+                "Công việc",
+                modifier = Modifier.clip(RoundedCornerShape(18.dp)).clickable { onOpenJobs() },
+            ) {
+                Row(Modifier.fillMaxWidth()) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Chưa thanh toán", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(Fmt.vnd(scopedJobs.sumOf { JobCalc.unpaidAmount(it) }), style = MaterialTheme.typography.titleMedium)
+                        Text("${Fmt.hours(scopedJobs.sumOf { JobCalc.unpaidHours(it) })} giờ", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                        Text("Tháng ${ym.monthValue}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${Fmt.hours(scopedJobs.sumOf { JobCalc.monthHours(it, ym) })} giờ", style = MaterialTheme.typography.titleMedium)
+                        val target = scopedJobs.sumOf { it.monthlyTarget }
+                        if (target > 0) {
+                            Text("mục tiêu ${Fmt.hours(target)} giờ", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                scopedJobs.filter { it.monthlyTarget > 0 }.forEach { j ->
+                    Text(j.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                    MonthProgress(j, ym)
+                }
+            }
+        }
 
         // Mục tiêu tiền gốc: một người khi đang lọc theo người đó, hoặc tất cả người có mục tiêu.
         // Mỗi người có thể có nhiều mục tiêu, hiện theo thứ tự ưu tiên.

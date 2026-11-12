@@ -27,6 +27,7 @@ class Repository(context: Context) {
     private val file = File(context.filesDir, "stk_v1.json")
     private val ownersFile = File(context.filesDir, "stk_owners.json")
     private val deletedFile = File(context.filesDir, "stk_deleted.json")
+    private val jobsFile = File(context.filesDir, "stk_jobs.json")
     private val prefs = context.getSharedPreferences("stk_prefs", Context.MODE_PRIVATE)
 
     /** Đọc file (tự giải mã nếu đã mã hóa). File không giải mã được thì đổi tên để giữ lại và trả về null. */
@@ -64,6 +65,12 @@ class Repository(context: Context) {
 
     fun saveOwners(list: List<Owner>) = writeText(ownersFile, Codec.json.encodeToString(list))
 
+    fun loadJobs(): List<Job> = runCatching {
+        readText(jobsFile)?.let { Codec.json.decodeFromString<List<Job>>(it) } ?: emptyList()
+    }.getOrDefault(emptyList())
+
+    fun saveJobs(list: List<Job>) = writeText(jobsFile, Codec.json.encodeToString(list))
+
     /** Mã sổ / người sở hữu đã xóa → thời điểm xóa (ISO). Dùng khi đồng bộ để máy khác cũng xóa theo. */
     fun loadDeleted(): Map<String, String> = runCatching {
         readText(deletedFile)?.let { Codec.json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
@@ -100,7 +107,12 @@ class Repository(context: Context) {
         set(v) = prefs.edit().putStringSet("notified", v).apply()
 }
 
-data class ImportResult(val accounts: List<Account>, val skipped: Int, val owners: List<Owner> = emptyList())
+data class ImportResult(
+    val accounts: List<Account>,
+    val skipped: Int,
+    val owners: List<Owner> = emptyList(),
+    val jobs: List<Job> = emptyList(),
+)
 
 object Codec {
     val json = Json {
@@ -109,8 +121,8 @@ object Codec {
         prettyPrint = true
     }
 
-    fun export(list: List<Account>, owners: List<Owner> = emptyList()): String =
-        json.encodeToString(BackupFile(exportedAt = Instant.now().toString(), owners = owners, accounts = list))
+    fun export(list: List<Account>, owners: List<Owner> = emptyList(), jobs: List<Job> = emptyList()): String =
+        json.encodeToString(BackupFile(exportedAt = Instant.now().toString(), owners = owners, accounts = list, jobs = jobs))
 
     fun fileName(today: LocalDate = LocalDate.now()) = "so-tiet-kiem-$today.json"
 
@@ -191,7 +203,13 @@ object Codec {
             }.distinctBy { it.id }
             Owner(id, name, goal, if (goal != null) goalDate else null, goals).normalized()
         }.distinctBy { it.id }
-        return ImportResult(out, skipped, owners)
+        // Công việc: đọc từng mục, mục sai thì bỏ qua
+        val jobs = ((root as? JsonObject)?.get("jobs") as? JsonArray).orEmpty().mapNotNull { el ->
+            runCatching { json.decodeFromJsonElement(Job.serializer(), el) }.getOrNull()
+                ?.takeIf { j -> j.id.isNotBlank() && j.name.isNotBlank() && j.rate >= 0 && runCatching { LocalDate.parse(j.startDate) }.isSuccess }
+                ?.let { j -> j.copy(name = j.name.take(80), entries = j.entries.filter { e -> runCatching { LocalDate.parse(e.date) }.isSuccess }) }
+        }.distinctBy { it.id }
+        return ImportResult(out, skipped, owners, jobs)
     }
 
     private fun JsonObject.str(k: String): String? {

@@ -96,7 +96,7 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
         }
         try {
             val r = Codec.parseImport(text)
-            if (r.accounts.isEmpty()) importError = "Không tìm thấy sổ hợp lệ nào trong file" + if (r.skipped > 0) " (${r.skipped} mục bị bỏ qua)." else "."
+            if (r.accounts.isEmpty() && r.jobs.isEmpty()) importError = "Không tìm thấy sổ hợp lệ nào trong file" + if (r.skipped > 0) " (${r.skipped} mục bị bỏ qua)." else "."
             else pending = r
         } catch (e: IllegalArgumentException) {
             importError = e.message
@@ -180,7 +180,7 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
                 else "Dữ liệu được mã hóa và chỉ nằm trên điện thoại này. Gỡ app hoặc xóa dữ liệu app thì các sổ sẽ mất, nên hãy xuất file định kỳ.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedButton(onClick = { vm.loadSample(); toast("Đã thêm 5 sổ, 2 người sở hữu và mục tiêu mẫu") }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { vm.loadSample(); toast("Đã thêm sổ, người sở hữu, mục tiêu và công việc mẫu") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Xem thử với dữ liệu mẫu")
             }
             OutlinedButton(onClick = { clearStep = 1 }, enabled = count > 0, modifier = Modifier.fillMaxWidth()) {
@@ -194,7 +194,7 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
     pending?.let { r ->
         AlertDialog(
             onDismissRequest = { pending = null },
-            title = { Text("Nhập ${r.accounts.size} sổ") },
+            title = { Text("Nhập ${r.accounts.size} sổ" + if (r.jobs.isNotEmpty()) ", ${r.jobs.size} công việc" else "") },
             text = {
                 Text(
                     (if (r.skipped > 0) "${r.skipped} mục không hợp lệ đã bị bỏ qua.\n\n" else "") +
@@ -203,7 +203,7 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val n = vm.importMerge(r.accounts, r.owners); pending = null
+                    val n = vm.importMerge(r.accounts, r.owners, r.jobs); pending = null
                     toast("Đã thêm $n sổ" + if (n < r.accounts.size) ", bỏ qua ${r.accounts.size - n} sổ trùng" else "")
                 }) { Text("Gộp vào hiện tại") }
             },
@@ -218,7 +218,7 @@ fun BackupScreen(vm: AppViewModel, count: Int, lastExport: Long, contentPadding:
             title = "Thay thế toàn bộ?",
             text = "$count sổ hiện có sẽ bị xóa và thay bằng ${r?.accounts?.size ?: 0} sổ trong file.",
             confirm = "Thay thế", danger = true,
-            onConfirm = { r?.let { vm.importReplace(it.accounts, it.owners); toast("Đã thay thế dữ liệu") }; pending = null },
+            onConfirm = { r?.let { vm.importReplace(it.accounts, it.owners, it.jobs); toast("Đã thay thế dữ liệu") }; pending = null },
             onDismiss = { confirmReplace = false },
         )
     }

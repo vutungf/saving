@@ -101,7 +101,7 @@ fun rememberExporter(vm: AppViewModel, toast: (String) -> Unit): Exporter {
             onConfirm = { password ->
                 busy = true
                 scope.launch {
-                    val plain = Codec.export(vm.accounts.value, vm.owners.value)
+                    val plain = Codec.export(vm.accounts.value, vm.owners.value, vm.jobs.value)
                     // Suy khóa từ mật khẩu mất khoảng 1 giây, chạy nền để không đứng màn hình
                     val content = if (password == null) plain else withContext(Dispatchers.Default) { Codec.encryptExport(plain, password) }
                     busy = false
